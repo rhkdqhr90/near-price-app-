@@ -133,6 +133,7 @@ src/
 
 ## 코딩 규칙 — 절대 위반 금지
 1. **함수형 컴포넌트 + hooks만 사용** (class 컴포넌트 금지)
+   - **예외**: `ErrorBoundary` — React 제약상 `getDerivedStateFromError` / `componentDidCatch`는 클래스 컴포넌트만 구현 가능. `src/components/common/ErrorBoundary.tsx` 한 파일에만 허용.
 2. **컴포넌트 파일명**: PascalCase (PriceCard.tsx)
 3. **훅/유틸 파일명**: camelCase (useAuth.ts, format.ts)
 4. **인라인 스타일 금지** → StyleSheet.create 사용

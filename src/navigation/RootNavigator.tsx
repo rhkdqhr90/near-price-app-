@@ -8,6 +8,7 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import AuthStack from './AuthStack';
 import MainTabNavigator from './MainTabNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 import { colors } from '../theme/colors';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,15 +36,17 @@ const RootNavigator: React.FC = () => {
   const showMain = isAuthenticated && isLocationSet;
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!hasSeenOnboarding ? (
-        <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
-      ) : showMain ? (
-        <Stack.Screen name="Main" component={MainTabNavigator} />
-      ) : (
-        <Stack.Screen name="Auth" component={AuthStack} />
-      )}
-    </Stack.Navigator>
+    <ErrorBoundary>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!hasSeenOnboarding ? (
+          <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
+        ) : showMain ? (
+          <Stack.Screen name="Main" component={MainTabNavigator} />
+        ) : (
+          <Stack.Screen name="Auth" component={AuthStack} />
+        )}
+      </Stack.Navigator>
+    </ErrorBoundary>
   );
 };
 

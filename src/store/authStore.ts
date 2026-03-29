@@ -88,9 +88,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const legacyAccess = await storage.get<string>('@nearprice/access_token');
       const legacyRefresh = await storage.get<string>('@nearprice/refresh_token');
       if (legacyAccess && legacyRefresh) {
-        await secureTokenStorage.saveTokens(legacyAccess, legacyRefresh);
-        await storage.remove('@nearprice/access_token');
-        await storage.remove('@nearprice/refresh_token');
+        try {
+          await secureTokenStorage.saveTokens(legacyAccess, legacyRefresh);
+          await storage.remove('@nearprice/access_token');
+          await storage.remove('@nearprice/refresh_token');
+        } catch {
+          // Keychain 저장 실패 시: 레거시 토큰을 메모리에만 유지하고 계속 진행
+          // 다음 로그인 시 Keychain 재시도
+        }
         accessToken = legacyAccess;
         refreshToken = legacyRefresh;
       }

@@ -1,8 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { StoreType } from '../types/api.types';
-
-const STORAGE_KEY = 'custom_store_types';
+import { storage, STORAGE_KEYS } from '../utils/storage';
 
 const DEFAULT_STORE_TYPES: { label: string; value: StoreType; isDefault: boolean }[] = [
   { label: '마트', value: 'mart', isDefault: true },
@@ -19,6 +17,11 @@ interface StorageItem {
   createdAt: string;
 }
 
+const isStorageItem = (ct: unknown): ct is StorageItem =>
+  typeof ct === 'object' && ct !== null &&
+  typeof (ct as Record<string, unknown>).label === 'string' &&
+  typeof (ct as Record<string, unknown>).value === 'string';
+
 export const useStoreTypes = () => {
   const [storeTypes, setStoreTypes] = useState<{ label: string; value: StoreType; isDefault: boolean }[]>(
     DEFAULT_STORE_TYPES,
@@ -29,9 +32,10 @@ export const useStoreTypes = () => {
   useEffect(() => {
     const loadStoreTypes = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const customTypes: StorageItem[] = JSON.parse(stored);
+        const parsed = await storage.get<StorageItem[]>(STORAGE_KEYS.CUSTOM_STORE_TYPES);
+        if (parsed !== null) {
+          if (!Array.isArray(parsed)) throw new Error('Invalid format');
+          const customTypes = parsed.filter(isStorageItem);
           const merged = [
             ...DEFAULT_STORE_TYPES,
             ...customTypes.map(ct => ({
@@ -45,6 +49,7 @@ export const useStoreTypes = () => {
           setStoreTypes(DEFAULT_STORE_TYPES);
         }
       } catch {
+        void storage.remove(STORAGE_KEYS.CUSTOM_STORE_TYPES).catch(() => {});
         setStoreTypes(DEFAULT_STORE_TYPES);
       } finally {
         setIsLoading(false);
@@ -60,24 +65,25 @@ export const useStoreTypes = () => {
       const trimmed = label.trim();
       if (!trimmed) return false;
 
-      // 중복 확인
-      if (storeTypes.some(st => st.label === trimmed)) {
-        return false;
-      }
-
       const customValue = `custom_${Date.now()}`;
       const newType = { label: trimmed, value: customValue as StoreType, isDefault: false };
 
-      // 스토리지 업데이트
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      const customTypes: StorageItem[] = stored ? JSON.parse(stored) : [];
+      const existing = await storage.get<StorageItem[]>(STORAGE_KEYS.CUSTOM_STORE_TYPES);
+      const customTypes: StorageItem[] = Array.isArray(existing) ? existing.filter(isStorageItem) : [];
+
+      // 중복 확인 (스토리지 기준)
+      if (customTypes.some(ct => ct.label === trimmed) ||
+          DEFAULT_STORE_TYPES.some(st => st.label === trimmed)) {
+        return false;
+      }
+
       customTypes.push({
         label: trimmed,
         value: customValue,
         isDefault: false,
         createdAt: new Date().toISOString(),
       });
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(customTypes));
+      await storage.set(STORAGE_KEYS.CUSTOM_STORE_TYPES, customTypes);
 
       // 상태 업데이트
       setStoreTypes(prev => [...prev, newType]);
@@ -85,7 +91,7 @@ export const useStoreTypes = () => {
     } catch {
       return false;
     }
-  }, [storeTypes]);
+  }, []);
 
   // 커스텀 카테고리 삭제
   const removeStoreType = useCallback(async (value: string): Promise<boolean> => {
@@ -95,12 +101,11 @@ export const useStoreTypes = () => {
         return false;
       }
 
-      // 스토리지 업데이트
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const customTypes: StorageItem[] = JSON.parse(stored);
+      const existing = await storage.get<StorageItem[]>(STORAGE_KEYS.CUSTOM_STORE_TYPES);
+      if (existing !== null) {
+        const customTypes: StorageItem[] = Array.isArray(existing) ? existing.filter(isStorageItem) : [];
         const filtered = customTypes.filter(ct => ct.value !== value);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        await storage.set(STORAGE_KEYS.CUSTOM_STORE_TYPES, filtered);
       }
 
       // 상태 업데이트

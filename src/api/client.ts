@@ -30,6 +30,7 @@ let failedQueue: Array<{
   resolve: (token: string) => void;
   reject: (err: unknown) => void;
 }> = [];
+const MAX_FAILED_QUEUE_SIZE = 10;
 
 const processQueue = (error: unknown, token: string | null) => {
   failedQueue.forEach((prom) => {
@@ -37,6 +38,8 @@ const processQueue = (error: unknown, token: string | null) => {
       prom.reject(error);
     } else if (token !== null) {
       prom.resolve(token);
+    } else {
+      prom.reject(new Error('토큰 갱신 실패'));
     }
   });
   failedQueue = [];
@@ -62,6 +65,9 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && !config._retry) {
       if (isRefreshing) {
+        if (failedQueue.length >= MAX_FAILED_QUEUE_SIZE) {
+          return Promise.reject(new Error('요청 대기열이 가득 찼습니다.'));
+        }
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {

@@ -98,6 +98,8 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
   const [searchQuery, setSearchQuery] = useState(route.params?.initialQuery ?? '');
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const recentSearchesRef = useRef<string[]>([]);
+  recentSearchesRef.current = recentSearches;
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
   const { mutate: addWishlist } = useAddWishlist();
@@ -116,10 +118,11 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
   const saveRecentSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    const updated = [trimmed, ...recentSearches.filter(q => q !== trimmed)].slice(0, MAX_RECENT_SEARCHES);
+    // ref로 항상 최신 목록 참조 — stale closure 방지
+    const updated = [trimmed, ...recentSearchesRef.current.filter(q => q !== trimmed)].slice(0, MAX_RECENT_SEARCHES);
     setRecentSearches(updated);
     await storage.set(STORAGE_KEYS.RECENT_SEARCHES, updated);
-  }, [recentSearches]);
+  }, []);
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
@@ -146,10 +149,11 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [saveRecentSearch]);
 
   const handleDeleteRecentSearch = useCallback(async (query: string) => {
-    const updated = recentSearches.filter(q => q !== query);
+    // ref로 항상 최신 목록 참조 — stale closure 방지
+    const updated = recentSearchesRef.current.filter(q => q !== query);
     setRecentSearches(updated);
     await storage.set(STORAGE_KEYS.RECENT_SEARCHES, updated);
-  }, [recentSearches]);
+  }, []);
 
   const handleClearAllRecentSearches = useCallback(async () => {
     setRecentSearches([]);

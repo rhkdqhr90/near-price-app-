@@ -78,24 +78,31 @@ export const naverLocalApi = {
     const res = await apiClient.get<NaverLocalResponse>('/naver/search', {
       params: { query: searchQuery, display: 10, sort: 'sim' },
     });
-    return (res.data.items ?? []).map((item) => {
-      // Naver Search API mapx/mapy는 소수점 없는 정수 (경도/위도 × 1e7)
-      const lng = (parseInt(item.mapx, 10) / 1e7).toFixed(7);
-      const lat = (parseInt(item.mapy, 10) / 1e7).toFixed(7);
-      const name = item.title.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (match, code: string) => {
-        const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
-        return entities[code] ?? match;
-      });
-      // Naver Search API는 고유 ID를 제공하지 않으므로 이름 + 좌표로 결과 내 유일성 보장
-      return {
-        id: `naver_${name}_${lng}_${lat}`,
-        name,
-        category: item.category,
-        address: item.address,
-        roadAddress: item.roadAddress,
-        x: lng,
-        y: lat,
-      };
-    });
+    return (res.data.items ?? [])
+      .map((item) => {
+        if (!item.title || !item.mapx || !item.mapy) return null;
+        // Naver Search API mapx/mapy는 소수점 없는 정수 (경도/위도 × 1e7)
+        const lngInt = parseInt(item.mapx, 10);
+        const latInt = parseInt(item.mapy, 10);
+        // 좌표 파싱 실패(빈 문자열 등) 시 해당 결과 제외
+        if (isNaN(lngInt) || isNaN(latInt)) return null;
+        const lng = (lngInt / 1e7).toFixed(7);
+        const lat = (latInt / 1e7).toFixed(7);
+        const name = item.title.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (match, code: string) => {
+          const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+          return entities[code] ?? match;
+        });
+        // Naver Search API는 고유 ID를 제공하지 않으므로 이름 + 좌표로 결과 내 유일성 보장
+        return {
+          id: `naver_${name}_${lng}_${lat}`,
+          name,
+          category: item.category,
+          address: item.address,
+          roadAddress: item.roadAddress,
+          x: lng,
+          y: lat,
+        };
+      })
+      .filter((item): item is NaverPlaceDocument => item !== null);
   },
 };

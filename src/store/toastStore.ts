@@ -25,6 +25,10 @@ let _idCounter = 0;
 
 /** 큐에서 다음 토스트를 꺼내 표시 */
 const _showNext = (set: (partial: Partial<ToastState> | ((s: ToastState) => Partial<ToastState>)) => void) => {
+  if (_timer) {
+    clearTimeout(_timer);
+    _timer = null;
+  }
   set((state) => {
     if (state.queue.length === 0) {
       return { visible: false };
@@ -92,8 +96,6 @@ export const useToastStore = create<ToastState>((set) => ({
       clearTimeout(_timer);
       _timer = null;
     }
-    set({ visible: false });
-    // 숨긴 후 큐에 남은 것 처리
-    _timer = setTimeout(() => _showNext(set), 200);
+    set({ visible: false, queue: [] });
   },
 }));

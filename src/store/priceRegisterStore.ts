@@ -73,7 +73,7 @@ export const usePriceRegisterStore = create<PriceRegisterState>((set) => ({
 
   setStore: (storeId, storeName) => set({ storeId, storeName, isDirty: true }),
   addItem: (item) => set((state) => ({
-    items: [...state.items, { ...item, key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }],
+    items: [...state.items, { ...item, key: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}` }],
     isDirty: true,
   })),
   updateItem: (index, item) =>

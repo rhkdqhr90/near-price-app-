@@ -50,7 +50,8 @@ export const storage = {
     if (value === null) return null;
     try {
       return JSON.parse(value) as T;
-    } catch {
+    } catch (err) {
+      console.error(`[storage.get] JSON.parse failed for key: ${key}`, err);
       return null;
     }
   },
@@ -74,4 +75,6 @@ export const STORAGE_KEYS = {
   LOCATION: '@nearprice/location',
   ONBOARDING_SEEN: '@nearprice/onboarding_seen',
   RECENT_SEARCHES: '@nearprice/recent_searches',
+  NOTIFICATION_SETTINGS: '@nearprice/notification_settings',
+  CUSTOM_STORE_TYPES: '@nearprice/custom_store_types',
 } as const;

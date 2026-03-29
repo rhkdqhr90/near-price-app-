@@ -260,6 +260,7 @@ const NicknameModal: React.FC<NicknameModalProps> = ({
               disabled={!canSubmit}
               accessibilityRole="button"
               accessibilityLabel="닉네임 변경 확인"
+              accessibilityState={{ disabled: !canSubmit }}
             >
               {loading ? (
                 <ActivityIndicator size="small" color={colors.white} />

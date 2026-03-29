@@ -42,8 +42,8 @@ export const vworldApi = {
     }
 
     // result[0].text = "경기도 수원시 영통구 매탄동 123-4" 같은 형태
-    const fullAddress = result[0].text;
-    if (!fullAddress) return null;
+    const fullAddress = result[0]?.text;
+    if (!fullAddress || fullAddress.trim() === '') return null;
 
     // 주소에서 "구 동" 또는 "시 동" 추출
     const parts = fullAddress.split(' ').map(p => p.trim()).filter(Boolean);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { storage } from '../utils/storage';
+import { storage, STORAGE_KEYS } from '../utils/storage';
 
 interface NotificationState {
   allNotifications: boolean;
@@ -13,8 +13,6 @@ interface NotificationState {
 }
 
 const noop = () => undefined;
-
-const NOTIFICATION_STORAGE_KEY = '@nearprice/notification_settings';
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   allNotifications: true,
@@ -30,7 +28,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       promotionNotification: newPromotionNotification,
     });
     storage
-      .set(NOTIFICATION_STORAGE_KEY, {
+      .set(STORAGE_KEYS.NOTIFICATION_SETTINGS, {
         allNotifications: enabled,
         priceChangeNotification: enabled,
         promotionNotification: newPromotionNotification,
@@ -43,7 +41,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const allNotifications = enabled || s.promotionNotification;
     set({ priceChangeNotification: enabled, allNotifications });
     storage
-      .set(NOTIFICATION_STORAGE_KEY, {
+      .set(STORAGE_KEYS.NOTIFICATION_SETTINGS, {
         allNotifications,
         priceChangeNotification: enabled,
         promotionNotification: s.promotionNotification,
@@ -56,7 +54,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const allNotifications = s.priceChangeNotification || enabled;
     set({ promotionNotification: enabled, allNotifications });
     storage
-      .set(NOTIFICATION_STORAGE_KEY, {
+      .set(STORAGE_KEYS.NOTIFICATION_SETTINGS, {
         allNotifications,
         priceChangeNotification: s.priceChangeNotification,
         promotionNotification: enabled,
@@ -71,7 +69,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       allNotifications: settings.notifPriceChange || settings.notifPromotion,
     };
     set(state);
-    storage.set(NOTIFICATION_STORAGE_KEY, state).catch(noop);
+    storage.set(STORAGE_KEYS.NOTIFICATION_SETTINGS, state).catch(noop);
   },
 
   restoreSettings: async () => {
@@ -79,13 +77,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       allNotifications: boolean;
       priceChangeNotification: boolean;
       promotionNotification: boolean;
-    }>(NOTIFICATION_STORAGE_KEY);
+    }>(STORAGE_KEYS.NOTIFICATION_SETTINGS);
 
     if (settings) {
       set({
-        allNotifications: settings.allNotifications,
-        priceChangeNotification: settings.priceChangeNotification,
-        promotionNotification: settings.promotionNotification,
+        allNotifications: typeof settings.allNotifications === 'boolean' ? settings.allNotifications : true,
+        priceChangeNotification: typeof settings.priceChangeNotification === 'boolean' ? settings.priceChangeNotification : true,
+        promotionNotification: typeof settings.promotionNotification === 'boolean' ? settings.promotionNotification : false,
       });
     }
   },
