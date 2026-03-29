@@ -2,15 +2,19 @@ import { API_BASE_URL } from './config';
 
 /**
  * 백엔드에서 내려온 이미지 URL을 현재 기기에서 접근 가능한 URL로 변환.
- * - 에뮬레이터 전용 주소(10.0.2.2) 또는 localhost → API_BASE_URL로 교체
+ * - 로컬/LAN 주소 (에뮬레이터 10.0.2.2, localhost, 192.168.x.x 등) → API_BASE_URL로 교체
  * - 상대 경로 → API_BASE_URL 앞에 붙이기
+ * - 포트 없는 외부 CDN URL은 교체하지 않음
  */
 export const fixImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   if (!url.startsWith('http')) {
     return `${API_BASE_URL}/${url.replace(/^\//, '')}`;
   }
-  return url.replace(/http:\/\/(10\.0\.2\.2|localhost):\d+/, API_BASE_URL);
+  return url.replace(
+    /https?:\/\/(?:localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+):\d+/g,
+    API_BASE_URL,
+  );
 };
 
 export const formatPrice = (price: number | null | undefined): string => {

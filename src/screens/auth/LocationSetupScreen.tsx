@@ -10,6 +10,7 @@ import {
   Platform,
   StyleSheet,
   PermissionsAndroid,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -22,9 +23,12 @@ import type { NaverGeocodeResult } from '../../api/naver-local.api';
 import { useReverseGeocode, useGeocodeSearch } from '../../hooks/queries/useLocation';
 import { useLocationStore } from '../../store/locationStore';
 import MapPinIcon from '../../components/icons/MapPinIcon';
+import SearchIcon from '../../components/icons/SearchIcon';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+
+const SCREEN_H = Dimensions.get('window').height;
 
 type LocationSetupRoute =
   | RouteProp<AuthStackParamList, 'LocationSetup'>
@@ -65,14 +69,12 @@ const LocationSetupScreen: React.FC = () => {
   const selectedRegionName = previewLocation?.regionName || null;
 
   // Sync reverse geocode result → previewLocation
-  // 이전에 처리한 결과를 추적하여 무한 루프 방지
   const lastProcessedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (gpsLatLng === null) return;
-    if (isReverseFetching) return; // 아직 로딩 중이면 대기
+    if (isReverseFetching) return;
 
-    // 동일한 결과를 중복 처리하지 않음
     const resultKey = `${gpsLatLng.lat},${gpsLatLng.lng},${reverseGeocodedName ?? ''},${isReverseError}`;
     if (lastProcessedRef.current === resultKey) return;
     lastProcessedRef.current = resultKey;
@@ -96,7 +98,6 @@ const LocationSetupScreen: React.FC = () => {
       });
       setInlineError(null);
     } else if (reverseGeocodedName === null) {
-      // API 성공이지만 동 이름 없음 (해상/산간 지역 등)
       setPreviewLocation({
         latitude: gpsLatLng.lat,
         longitude: gpsLatLng.lng,
@@ -128,13 +129,11 @@ const LocationSetupScreen: React.FC = () => {
       return;
     }
     setIsGpsLoading(true);
-    // 이전 역지오코딩 캐시 무효화 (실패 결과 재사용 방지)
     invalidateAndRefetch().catch(() => {});
     Geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         setGpsLatLng({ lat: latitude, lng: longitude });
-        // isGpsLoading cleared by useEffect when reverseGeocodedName resolves
       },
       () => {
         setIsGpsLoading(false);
@@ -167,7 +166,6 @@ const LocationSetupScreen: React.FC = () => {
       return;
     }
     setInlineError(null);
-    // jibunAddress = 동 이름(첫 토큰), roadAddress = 전체 주소(목록 표시용)
     const regionName = doc.jibunAddress || doc.roadAddress;
     setPreviewLocation({ latitude, longitude, regionName });
     setDebouncedSearchQuery('');
@@ -180,15 +178,14 @@ const LocationSetupScreen: React.FC = () => {
       return;
     }
     setLocation(previewLocation.latitude, previewLocation.longitude, previewLocation.regionName);
-    // MyPageStack에서 진입한 경우(returnTo 파라미터 존재): 수동으로 goBack
-    // AuthStack에서 진입한 경우: RootNavigator가 자동으로 Main으로 전환
+    // MyPageStack 진입 시: goBack으로 수동 복귀
+    // AuthStack 진입 시: setLocation으로 locationStore가 업데이트되면
+    //   RootNavigator가 조건부 렌더링으로 자동 Main 전환 — 명시적 navigate 불필요
     if (route.params?.returnTo === 'mypage') {
       navigation.goBack();
     }
   };
 
-  // 마운트 시 1회만 GPS 감지 실행
-  // handleGpsDetect를 deps에 넣으면 queryKey 변경 → 무한 루프 발생
   const handleGpsDetectRef = useRef(handleGpsDetect);
   handleGpsDetectRef.current = handleGpsDetect;
   useEffect(() => {
@@ -202,180 +199,296 @@ const LocationSetupScreen: React.FC = () => {
   }, []);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.container}>
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>동네 설정</Text>
-          <Text style={styles.subtitle}>어디서 장을 보시나요?</Text>
-
-          {/* 인라인 에러 배너 */}
-          {inlineError ? (
-            <View style={styles.errorBanner} accessible={true} accessibilityLiveRegion="polite" accessibilityLabel={`오류: ${inlineError}`}>
-              <Text style={styles.errorBannerText}>{inlineError}</Text>
-              <TouchableOpacity
-                onPress={() => setInlineError(null)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="오류 메시지 닫기"
-              >
-                <Text style={styles.errorBannerClose}>닫기</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* GPS 자동 감지 */}
-          <TouchableOpacity
-            style={styles.gpsButton}
-            onPress={handleGpsDetect}
-            disabled={isGpsLoading}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="현재 위치 자동 감지"
+    <View style={styles.root}>
+      {/* ── 지도 영역 (상단 38%) ─────────────────────────────────────── */}
+      <View style={styles.mapZone}>
+        {previewLocation ? (
+          <MapViewWrapper
+            key={`${previewLocation.latitude}_${previewLocation.longitude}`}
+            style={styles.mapFill}
+            initialCamera={{
+              latitude: previewLocation.latitude,
+              longitude: previewLocation.longitude,
+              zoom: 14,
+            }}
+            isShowLocationButton={false}
+            isShowZoomControls={false}
+            isScrollGesturesEnabled={false}
+            isZoomGesturesEnabled={false}
+            isRotateGesturesEnabled={false}
+            isTiltGesturesEnabled={false}
+            mapType="Basic"
+            locale="ko"
           >
+            {typeof previewLocation.latitude === 'number' && typeof previewLocation.longitude === 'number'
+              && !isNaN(previewLocation.latitude) && !isNaN(previewLocation.longitude) && (
+                <NaverMapMarkerOverlay
+                  latitude={previewLocation.latitude}
+                  longitude={previewLocation.longitude}
+                  tintColor={colors.primary}
+                />
+              )}
+          </MapViewWrapper>
+        ) : (
+          <View style={styles.mapPlaceholder}>
             {isGpsLoading ? (
-              <ActivityIndicator color={colors.primary} size="small" accessibilityLabel="위치 감지 중" />
+              <>
+                <ActivityIndicator
+                  color={colors.primary}
+                  size="large"
+                  accessibilityLabel="위치 감지 중"
+                />
+                <Text style={styles.mapPlaceholderText}>위치 찾는 중...</Text>
+              </>
             ) : (
-              <View style={styles.gpsButtonInner}>
-                <MapPinIcon size={spacing.iconSm} color={colors.primary} />
-                <Text style={styles.gpsButtonText}>현재 위치 자동 감지</Text>
-              </View>
+              <>
+                <MapPinIcon size={36} color={colors.gray400} />
+                <Text style={styles.mapPlaceholderText}>
+                  {'위치를 선택하면\n지도가 표시됩니다'}
+                </Text>
+              </>
             )}
-          </TouchableOpacity>
+          </View>
+        )}
 
-          {/* 선택된 지역 표시 */}
-          {selectedRegionName ? (
-            <View style={styles.selectedRegion}>
-              <Text style={styles.selectedRegionLabel}>선택된 동네</Text>
-              <Text style={styles.selectedRegionName}>{selectedRegionName}</Text>
+        {/* 동네 칩 오버레이 */}
+        {selectedRegionName ? (
+          <View style={styles.locationChipWrap}>
+            <View style={styles.locationChip}>
+              <MapPinIcon size={spacing.iconXs} color={colors.primary} />
+              <Text style={styles.locationChipText}>{selectedRegionName}</Text>
             </View>
-          ) : null}
-
-          {/* 지도 미리보기 — key로 위치 변경 시 지도 리마운트 */}
-          {previewLocation ? (
-            <MapViewWrapper
-              key={`${previewLocation.latitude}_${previewLocation.longitude}`}
-              style={styles.mapPreview}
-              initialCamera={{
-                latitude: previewLocation.latitude,
-                longitude: previewLocation.longitude,
-                zoom: 14,
-              }}
-              isShowLocationButton={false}
-              isShowZoomControls={false}
-              isScrollGesturesEnabled={false}
-              isZoomGesturesEnabled={false}
-              isRotateGesturesEnabled={false}
-              isTiltGesturesEnabled={false}
-              mapType="Basic"
-              locale="ko"
-            >
-              {typeof previewLocation.latitude === 'number' && typeof previewLocation.longitude === 'number'
-                && !isNaN(previewLocation.latitude) && !isNaN(previewLocation.longitude) && (
-                  <NaverMapMarkerOverlay
-                    latitude={previewLocation.latitude}
-                    longitude={previewLocation.longitude}
-                    tintColor={colors.primary}
-                  />
-                )}
-            </MapViewWrapper>
-          ) : null}
-
-          {/* 구분선 */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>또는 직접 검색</Text>
-            <View style={styles.dividerLine} />
           </View>
+        ) : null}
+      </View>
 
-          {/* 주소 검색 */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={handleSearch}
-              onFocus={() => {
-                // 키보드가 올라올 때 검색란이 보이도록 스크롤
-                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300);
-              }}
-              placeholder="동 이름으로 검색 (예: 역삼동)"
-              placeholderTextColor={colors.gray400}
-              returnKeyType="search"
-              accessibilityLabel="동 이름 검색"
-              accessibilityHint="동 이름으로 지역을 검색하세요"
-            />
-            {isSearching ? (
-              <ActivityIndicator
-                style={styles.searchIndicator}
-                color={colors.primary}
-                size="small"
-                accessibilityLabel="검색 중"
-              />
-            ) : null}
-          </View>
+      {/* ── 하단 패널 ─────────────────────────────────────────────────── */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.bottomPanel}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.flex}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xxl },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* 드래그 핸들 */}
+            <View style={styles.dragHandle} />
 
-          {/* 검색 결과 */}
-          {searchResults.length > 0 ? (
-            <View style={styles.searchResultList}>
-              {searchResults.map((item) => (
+            <Text style={styles.title}>내 동네를 알려주세요</Text>
+            <Text style={styles.subtitle}>어디서 장을 보시나요?</Text>
+
+            {/* 인라인 에러 배너 */}
+            {inlineError ? (
+              <View
+                style={styles.errorBanner}
+                accessible={true}
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={`오류: ${inlineError}`}
+              >
+                <Text style={styles.errorBannerText}>{inlineError}</Text>
                 <TouchableOpacity
-                  key={`${item.jibunAddress}-${item.x}-${item.y}`}
-                  style={styles.searchResultItem}
-                  onPress={() => handleSelectAddress(item)}
-                  activeOpacity={0.7}
+                  onPress={() => setInlineError(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
-                  accessibilityLabel={`주소 ${item.roadAddress || item.jibunAddress}`}
+                  accessibilityLabel="오류 메시지 닫기"
                 >
-                  <Text style={styles.searchResultText}>
-                    {item.roadAddress || item.jibunAddress}
-                  </Text>
+                  <Text style={styles.errorBannerClose}>닫기</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
+              </View>
+            ) : null}
 
-          {/* 시작하기 버튼 */}
-          <View style={[styles.bottomArea, { paddingBottom: insets.bottom + spacing.md }]}>
+            {/* GPS 자동 감지 버튼 */}
             <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                !selectedRegionName && styles.confirmButtonDisabled,
-              ]}
-              onPress={handleConfirm}
-              disabled={!selectedRegionName}
+              style={styles.gpsButton}
+              onPress={handleGpsDetect}
+              disabled={isGpsLoading}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={selectedRegionName ? `${selectedRegionName}로 시작하기` : '동네를 선택하세요'}
-              accessibilityState={{ disabled: !selectedRegionName }}
+              accessibilityLabel="현재 위치 자동 감지"
             >
-              <Text style={styles.confirmButtonText}>시작하기</Text>
+              {isGpsLoading ? (
+                <ActivityIndicator
+                  color={colors.onPrimary}
+                  size="small"
+                  accessibilityLabel="위치 감지 중"
+                />
+              ) : (
+                <>
+                  <MapPinIcon size={spacing.iconSm} color={colors.onPrimary} />
+                  <Text style={styles.gpsButtonText}>현재 위치 자동 감지</Text>
+                </>
+              )}
             </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
+
+            {/* 구분선 */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>또는 직접 검색</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* 주소 검색 */}
+            <View style={styles.searchContainer}>
+              <SearchIcon size={spacing.iconSm} color={colors.gray400} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                onFocus={() => {
+                  setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300);
+                }}
+                placeholder="동 이름으로 검색 (예: 역삼동)"
+                placeholderTextColor={colors.gray400}
+                returnKeyType="search"
+                accessibilityLabel="동 이름 검색"
+                accessibilityHint="동 이름으로 지역을 검색하세요"
+              />
+              {isSearching ? (
+                <ActivityIndicator
+                  color={colors.primary}
+                  size="small"
+                  accessibilityLabel="검색 중"
+                />
+              ) : null}
+            </View>
+
+            {/* 검색 결과 */}
+            {searchResults.length > 0 ? (
+              <View style={styles.searchResultList}>
+                {searchResults.map((item) => (
+                  <TouchableOpacity
+                    key={`${item.jibunAddress}-${item.x}-${item.y}`}
+                    style={styles.searchResultItem}
+                    onPress={() => handleSelectAddress(item)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`주소 ${item.roadAddress || item.jibunAddress}`}
+                  >
+                    <Text style={styles.searchResultText}>
+                      {item.roadAddress || item.jibunAddress}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
+            {/* 시작하기 버튼 */}
+            <View style={styles.bottomArea}>
+              <TouchableOpacity
+                style={[
+                  styles.confirmButton,
+                  !selectedRegionName && styles.confirmButtonDisabled,
+                ]}
+                onPress={handleConfirm}
+                disabled={!selectedRegionName}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={selectedRegionName ? `${selectedRegionName}로 시작하기` : '동네를 선택하세요'}
+                accessibilityState={{ disabled: !selectedRegionName }}
+              >
+                <Text style={styles.confirmButtonText}>시작하기</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.surfaceContainerHigh,
+  },
   flex: {
     flex: 1,
   },
-  container: {
+
+  // ── 지도 영역 ──────────────────────────────────────────────────────────
+  mapZone: {
+    height: SCREEN_H * 0.38,
+    backgroundColor: colors.surfaceContainerHigh,
+    overflow: 'hidden',
+  },
+  mapFill: {
     flex: 1,
-    backgroundColor: colors.gray100,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  mapPlaceholderText: {
+    ...typography.bodySm,
+    color: colors.gray400,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── 동네 칩 오버레이 ───────────────────────────────────────────────────
+  locationChipWrap: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  locationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    shadowColor: colors.shadowBase,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
+    shadowOpacity: 0.15,
+    shadowRadius: spacing.shadowRadiusMd,
+    elevation: 4,
+  },
+  locationChipText: {
+    ...typography.labelMd,
+    fontWeight: '700' as const,
+    color: colors.black,
+  },
+
+  // ── 하단 패널 ──────────────────────────────────────────────────────────
+  bottomPanel: {
+    flex: 1,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderTopLeftRadius: spacing.radiusXl,
+    borderTopRightRadius: spacing.radiusXl,
+    marginTop: -spacing.radiusXl,
+    shadowColor: colors.shadowBase,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYUp },
+    shadowOpacity: 0.08,
+    shadowRadius: spacing.shadowRadiusXl,
+    elevation: 8,
   },
   scrollContent: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxl,
+    paddingTop: spacing.md,
   },
+  dragHandle: {
+    width: spacing.dragHandleW,
+    height: spacing.dragHandleH,
+    backgroundColor: colors.gray200,
+    borderRadius: spacing.radiusFull,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+
+  // ── 타이틀 ─────────────────────────────────────────────────────────────
   title: {
     ...typography.displaySm,
     marginBottom: spacing.xs,
@@ -385,14 +498,13 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     marginBottom: spacing.lg,
   },
-  // 인라인 에러 배너
+
+  // ── 에러 배너 ──────────────────────────────────────────────────────────
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.dangerLight,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.danger,
+    borderRadius: spacing.radiusMd,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
@@ -408,43 +520,30 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '600' as const,
   },
+
+  // ── GPS 버튼 ──────────────────────────────────────────────────────────
   gpsButton: {
+    backgroundColor: colors.primary,
+    borderRadius: spacing.radiusFull,
+    height: spacing.buttonHeight,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
+    gap: spacing.sm,
     marginBottom: spacing.md,
-    minHeight: 48,
-  },
-  gpsButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYLg },
+    shadowOpacity: 0.3,
+    shadowRadius: spacing.shadowRadiusMd,
+    elevation: 6,
   },
   gpsButtonText: {
-    ...typography.headingMd,
-    color: colors.primary,
+    ...typography.labelMd,
+    fontWeight: '700' as const,
+    color: colors.onPrimary,
   },
-  selectedRegion: {
-    backgroundColor: colors.white,
-    borderRadius: spacing.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  selectedRegionLabel: {
-    ...typography.caption,
-    fontWeight: '500' as const,
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  selectedRegionName: {
-    ...typography.headingBase,
-  },
+
+  // ── 구분선 ─────────────────────────────────────────────────────────────
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -461,55 +560,57 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.sm,
     color: colors.gray400,
   },
+
+  // ── 검색바 ────────────────────────────────────────────────────────────
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: spacing.sm,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    height: 48,
+    height: 24,
     ...typography.bodyMd,
     color: colors.black,
+    padding: 0,
   },
-  searchIndicator: {
-    marginLeft: spacing.sm,
-  },
+
+  // ── 검색 결과 ──────────────────────────────────────────────────────────
   searchResultList: {
-    backgroundColor: colors.white,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: spacing.radiusMd,
     marginBottom: spacing.sm,
+    shadowColor: colors.shadowBase,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
+    shadowOpacity: 0.08,
+    shadowRadius: spacing.shadowRadiusXl,
+    elevation: 4,
+    overflow: 'hidden',
   },
   searchResultItem: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
-  },
-  mapPreview: {
-    height: spacing.locationMapPreviewH,
-    borderRadius: spacing.sm,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: spacing.borderThin,
+    borderBottomColor: colors.surfaceContainerLow,
   },
   searchResultText: {
     ...typography.bodyMd,
     color: colors.black,
   },
+
+  // ── 확인 버튼 ──────────────────────────────────────────────────────────
   bottomArea: {
     paddingTop: spacing.md,
   },
   confirmButton: {
     backgroundColor: colors.primary,
-    borderRadius: spacing.sm,
-    height: 52,
+    borderRadius: spacing.radiusFull,
+    height: spacing.buttonHeight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -517,8 +618,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray400,
   },
   confirmButtonText: {
-    ...typography.headingMd,
-    color: colors.white,
+    ...typography.labelMd,
+    fontWeight: '700' as const,
+    color: colors.onPrimary,
   },
 });
 

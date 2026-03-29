@@ -197,6 +197,8 @@ export interface WishlistItem {
   unitType: UnitType;
   lowestPrice: number | null;
   lowestPriceStoreName: string | null;
+  imageUrl: string | null;
+  verificationCount: number;
   addedAt: string;
 }
 
@@ -467,8 +469,24 @@ export interface ProductPriceCard {
   imageUrl: string | null;
   quantity: string | null;
   hasClosingDiscount: boolean;
+  verificationCount: number;
   createdAt: string;
   registrant: { nickname: string; profileImageUrl: string | null } | null;
+}
+
+// ─── StoreReview ──────────────────────────────────────────────────────────
+
+export interface StoreReviewResponse {
+  id: string;
+  rating: number;
+  comment: string | null;
+  user: { id: string; nickname: string };
+  createdAt: string;
+}
+
+export interface CreateStoreReviewDto {
+  rating: number;
+  comment?: string;
 }
 
 // ─── Common ────────────────────────────────────────────────────────────────

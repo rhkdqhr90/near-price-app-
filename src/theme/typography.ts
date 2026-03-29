@@ -111,6 +111,22 @@ export const typography = {
     letterSpacing: -0.5,
   },
 
+  // 극소형 배지 텍스트 (9pt Bold) — 카테고리 배지 등 아주 작은 레이블
+  microLabel: {
+    fontFamily: PJS.bold,
+    fontSize: 9,
+    color: colors.gray400,
+  },
+
+  // 카드 내 중형 가격 표시 (24pt ExtraBold) — HomeScreen 히어로 카드용
+  priceCard: {
+    fontFamily: PJS.extraBold,
+    fontSize: 24,
+    color: colors.primary,
+    letterSpacing: -0.5,
+    lineHeight: 28,
+  },
+
   // ─── PriceDetailScreen 전용 타이포그래피 토큰 ─────────────────────────────
   // 상품 상세 타이틀 (28pt 900 ExtraBold)
   productDetailTitle: {
