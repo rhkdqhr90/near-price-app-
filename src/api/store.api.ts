@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { StoreResponse, CreateStoreDto, NearbyStoreResponse } from '../types/api.types';
+import type { StoreResponse, CreateStoreDto, NearbyStoreResponse, StoreReviewResponse, PaginatedResponse, CreateStoreReviewDto } from '../types/api.types';
 
 export const storeApi = {
   getAll: () =>
@@ -21,4 +21,10 @@ export const storeApi = {
 
   create: (dto: CreateStoreDto) =>
     apiClient.post<StoreResponse>('/store', dto),
+
+  getReviews: (storeId: string, page = 1, limit = 20) =>
+    apiClient.get<PaginatedResponse<StoreReviewResponse>>(`/store/${storeId}/reviews`, { params: { page, limit } }),
+
+  addReview: (storeId: string, dto: CreateStoreReviewDto) =>
+    apiClient.post<StoreReviewResponse>(`/store/${storeId}/reviews`, dto),
 };

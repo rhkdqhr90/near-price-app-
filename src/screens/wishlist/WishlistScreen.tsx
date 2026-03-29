@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Pressable,
-  StyleSheet, Alert, RefreshControl, type ListRenderItemInfo,
+  StyleSheet, Alert, RefreshControl, Image, type ListRenderItemInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MainTabScreenProps } from '../../navigation/types';
@@ -10,8 +10,8 @@ import { useMyWishlist, useRemoveWishlist } from '../../hooks/queries/useWishlis
 import SkeletonCard from '../../components/common/SkeletonCard';
 import HeartIcon from '../../components/icons/HeartIcon';
 import WifiOffIcon from '../../components/icons/WifiOffIcon';
-import StoreIcon from '../../components/icons/StoreIcon';
-import { formatPrice } from '../../utils/format';
+import MapPinIcon from '../../components/icons/MapPinIcon';
+import { formatPrice, fixImageUrl } from '../../utils/format';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -25,17 +25,38 @@ const UNIT_LABEL: Record<UnitType, string> = {
 };
 
 // ── 카테고리 → 한글 배지 / 이모지 ─────────────────────────────────────────
-const CATEGORY_BADGE: Record<ProductCategory, { label: string; emoji: string }> = {
-  vegetable:  { label: '채소',     emoji: '🥦' },
-  fruit:      { label: '과일',     emoji: '🍎' },
-  meat:       { label: '육류',     emoji: '🥩' },
-  seafood:    { label: '수산물',   emoji: '🐟' },
-  dairy:      { label: '유제품',   emoji: '🥛' },
-  grain:      { label: '곡물',     emoji: '🌾' },
-  processed:  { label: '가공식품', emoji: '🛒' },
-  household:  { label: '생활용품', emoji: '🧴' },
-  other:      { label: '기타',     emoji: '📦' },
+const CATEGORY_LABEL: Record<ProductCategory, string> = {
+  vegetable: '채소',
+  fruit:     '과일',
+  meat:      '육류',
+  seafood:   '수산물',
+  dairy:     '유제품',
+  grain:     '곡류',
+  processed: '가공식품',
+  household: '생활용품',
+  other:     '기타',
 };
+
+// ── 이미지 영역 서브컴포넌트 (onError fallback 상태 관리) ─────────────────
+interface CardImageProps {
+  imageUri: string | null;
+  productName: string;
+}
+
+const CardImage = React.memo(({ imageUri, productName }: CardImageProps) => {
+  const [imgError, setImgError] = useState(false);
+  if (!imageUri || imgError) return null;
+  return (
+    <Image
+      source={{ uri: imageUri }}
+      style={styles.cardFillImage}
+      resizeMode="cover"
+      onError={() => setImgError(true)}
+      accessible={true}
+      accessibilityLabel={`${productName} 상품 이미지`}
+    />
+  );
+});
 
 const WishlistScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -82,9 +103,10 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
   }, [removeWishlist]);
 
   // ── 카드 (모든 아이템 동일 레이아웃) ────────────────────────────────────
-  const renderCard = useCallback((item: WishlistItem) => {
-    const badge = CATEGORY_BADGE[item.category] ?? { label: '기타', emoji: '📦' };
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<WishlistItem>) => {
+    const categoryLabel = CATEGORY_LABEL[item.category] ?? '기타';
     const unitLabel = UNIT_LABEL[item.unitType] ?? '';
+    const imageUri = fixImageUrl(item.imageUrl);
     return (
       <Pressable
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -92,34 +114,32 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
         accessibilityRole="button"
         accessibilityLabel={`찜한 상품 ${item.productName}${item.lowestPrice !== null ? ` ${formatPrice(item.lowestPrice)}` : ''}`}
       >
-        {/* 이미지 영역: 다크 배경 + 이모지 */}
+        {/* 이미지 영역: 카드 내부에 독립된 rounded 이미지 */}
         <View style={styles.cardImgWrap}>
-          <Text style={styles.cardEmoji}>{badge.emoji}</Text>
+          <CardImage imageUri={imageUri} productName={item.productName} />
         </View>
-
-        {/* 하트 버튼: 카드 우상단 absolute */}
-        <TouchableOpacity
-          style={styles.cardHeartBtn}
-          onPress={() => handleDelete(item)}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={`${item.productName} 찜 삭제`}
-        >
-          <HeartIcon size={16} color={colors.danger} filled />
-        </TouchableOpacity>
 
         {/* 콘텐츠 영역 */}
         <View style={styles.cardBody}>
-          {/* 배지 (독립 row, 좌측 정렬) */}
-          <View style={styles.cardBadgeRow}>
+          {/* 배지 + 하트 버튼 한 row */}
+          <View style={styles.cardHeaderRow}>
             <View style={styles.cardBadge}>
-              <Text style={styles.cardBadgeText}>{badge.label.toUpperCase()}</Text>
+              <Text style={styles.cardBadgeText}>{categoryLabel}</Text>
             </View>
+            <TouchableOpacity
+              style={styles.cardHeartBtn}
+              onPress={() => handleDelete(item)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.productName} 찜 삭제`}
+            >
+              <HeartIcon size={16} color={colors.danger} filled />
+            </TouchableOpacity>
           </View>
 
-          {/* 상품명 (1줄) */}
-          <Text style={styles.cardProductName} numberOfLines={1}>{item.productName}</Text>
+          {/* 상품명 (2줄) */}
+          <Text style={styles.cardProductName} numberOfLines={2}>{item.productName}</Text>
 
           {/* 가격 + 단위 */}
           {item.lowestPrice !== null ? (
@@ -134,31 +154,24 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
           {/* 매장 */}
           {item.lowestPriceStoreName ? (
             <View style={styles.cardStoreRow}>
-              <StoreIcon size={12} color={colors.outlineColor} />
+              <MapPinIcon size={spacing.iconXs} color={colors.outlineColor} />
               <Text style={styles.cardStoreName} numberOfLines={1}>
                 {item.lowestPriceStoreName}
               </Text>
             </View>
           ) : null}
 
-          {/* 버튼 */}
-          <TouchableOpacity
-            style={styles.cardViewBtn}
-            onPress={() => handleItemPress(item)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.productName} 가격 보기`}
-          >
-            <Text style={styles.cardViewBtnText}>→ 가격 보기</Text>
-          </TouchableOpacity>
+          {/* 검증 칩 */}
+          {item.verificationCount > 0 && (
+            <View style={styles.verifyChip}>
+              <Text style={styles.verifyChipText}>✓ {item.verificationCount}명 확인</Text>
+            </View>
+          )}
         </View>
       </Pressable>
     );
   }, [handleItemPress, handleDelete]);
 
-  const renderItem = useCallback(({ item }: ListRenderItemInfo<WishlistItem>) => {
-    return renderCard(item);
-  }, [renderCard]);
 
   // ── 빈 상태 ──────────────────────────────────────────────────────────────
   const renderEmpty = useCallback(() => {
@@ -214,31 +227,6 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
     );
   }, [isError, refetch, navigation]);
 
-  // ── 에디토리얼 헤더: "내 수확물" 44px extrabold ─────────────────────────
-  const listHeader = useMemo(() => (
-    <View style={styles.editorialHeader}>
-      <Text style={styles.editorialTitle}>내 수확물</Text>
-      <Text style={styles.editorialSubtitle}>동네 이웃이 추천한 물건, 한눈에 모아봐요.</Text>
-    </View>
-  ), []);
-
-  // ── 추천 섹션 (리스트 하단) ─────────────────────────────────────────────
-  const listFooter = useMemo(() => items.length > 0 ? (
-    <View style={styles.recommendSection}>
-      <Text style={styles.recommendLabel}>추천 상품</Text>
-      <View style={styles.recommendCard}>
-        <Text style={styles.recommendBody}>더 많은 동네 특산물을 찾아보세요.</Text>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => navigation.navigate('HomeStack', { screen: 'Home' })}
-          accessibilityRole="button"
-          accessibilityLabel="계절 특산물 탐색하기"
-        >
-          <Text style={styles.recommendLink}>계절 특산물 탐색 →</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  ) : null, [items.length, navigation]);
 
   const containerStyle = useMemo(
     () => [styles.container, { paddingTop: insets.top }],
@@ -269,8 +257,6 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
           keyExtractor={(item) => item.productId}
           renderItem={renderItem}
           contentContainerStyle={listContentStyle}
-          ListHeaderComponent={listHeader}
-          ListFooterComponent={listFooter}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
           refreshControl={
@@ -306,7 +292,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.surfaceContainer,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: typography.headingLg.fontSize,
     fontWeight: '800' as const,
     color: colors.black,
     letterSpacing: -0.3,
@@ -321,30 +307,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   countBadgeText: {
-    fontSize: 11,
+    fontSize: typography.caption.fontSize,
     fontWeight: '800' as const,
     color: colors.white,
-  },
-
-  // ─── 에디토리얼 헤더 ──────────────────────────────────────────────────────
-  // HTML: text-[44px] font-extrabold text-primary leading-tight tracking-[-1.5px]
-  editorialHeader: {
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxl,
-  },
-  editorialTitle: {
-    fontSize: 44,
-    fontWeight: '800' as const,
-    color: colors.primary,
-    letterSpacing: -1.5,
-    lineHeight: 50,
-    marginBottom: spacing.xs,
-  },
-  editorialSubtitle: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: colors.onSurfaceVariant,
   },
 
   // ─── 공통 ─────────────────────────────────────────────────────────────────
@@ -353,40 +318,54 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   noPriceText: {
-    fontSize: 13,
+    fontSize: typography.bodySm.fontSize,
     fontWeight: '400' as const,
     color: colors.gray400,
   },
 
-  // ─── 카드 (모든 아이템 동일) ─────────────────────────────────────────────
+  // ─── 카드 (수평 레이아웃) ─────────────────────────────────────────────
   card: {
+    flexDirection: 'row',
+    gap: spacing.md,
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: spacing.radiusLg,
     marginBottom: spacing.md,
+    padding: spacing.lg,
     shadowColor: colors.shadowBase,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
     shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowRadius: spacing.shadowRadiusLg,
     elevation: 3,
-    overflow: 'hidden',  // borderRadius 클리핑 유지 (Android 필수)
+    overflow: 'hidden',
   },
-  // 이미지: 2.5:1 비율 다크 배경 + 이모지
+  // 이미지: 고정 wishlistCardImgSize×wishlistCardImgSize, 자체 rounded corners
   cardImgWrap: {
-    width: '100%',
-    aspectRatio: 2.5,
-    backgroundColor: colors.wishlistImgBg,
+    width: spacing.wishlistCardImgSize,
+    height: spacing.wishlistCardImgSize,
+    flexShrink: 0,
+    borderRadius: spacing.radiusMd,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardEmoji: {
-    fontSize: 52,
+  cardFillImage: {
+    width: spacing.wishlistCardImgSize,
+    height: spacing.wishlistCardImgSize,
   },
-  // 하트 버튼: 카드 우상단 absolute
+  // 콘텐츠 영역 (flex:1 — 이미지 오른쪽 나머지 공간)
+  cardBody: {
+    flex: 1,
+  },
+  // 배지 + 하트 버튼 헤더 row
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  // 하트 버튼 (인라인 배치, absolute 아님)
   cardHeartBtn: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    zIndex: 10,
     width: spacing.heartBtnSm,
     height: spacing.heartBtnSm,
     borderRadius: spacing.heartBtnSm / 2,
@@ -394,20 +373,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.shadowBase,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: spacing.shadowOffsetY },
     shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowRadius: spacing.shadowRadiusMd,
     elevation: 3,
-  },
-  // 콘텐츠 영역 (padding 축소: 16→12)
-  cardBody: {
-    padding: spacing.md,
-  },
-  // 배지 row (독립, 좌측 정렬)
-  cardBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
   },
   cardBadge: {
     backgroundColor: colors.tertiaryContainer,
@@ -416,17 +385,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   cardBadgeText: {
-    fontSize: 9,
+    fontSize: typography.microLabel.fontSize,
     fontWeight: '800' as const,
     color: colors.onTertiaryContainer,
     letterSpacing: 1.5,
     textTransform: 'uppercase' as const,
   },
   cardProductName: {
-    fontSize: 16,
+    fontSize: typography.labelMd.fontSize,
     fontWeight: '700' as const,
     color: colors.black,
-    lineHeight: 22,
+    lineHeight: 20,
     marginBottom: spacing.xs,
   },
   cardPriceRow: {
@@ -436,13 +405,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardPrice: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: colors.primary,
-    letterSpacing: -0.3,
+    ...typography.price,
   },
   cardPriceUnit: {
-    fontSize: 12,
+    fontSize: typography.labelSm.fontSize,
     fontWeight: '400' as const,
     color: colors.outlineColor,
   },
@@ -453,60 +419,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,  // 16px → 8px
   },
   cardStoreName: {
-    fontSize: 12,
+    fontSize: typography.labelSm.fontSize,
     fontWeight: '500' as const,
     color: colors.outlineColor,
     flex: 1,
   },
-  cardViewBtn: {
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: spacing.radiusMd,
-    paddingVertical: spacing.sm + spacing.micro,  // 12px → 10px
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardViewBtnText: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: colors.white,
-  },
 
-  // ─── 추천 섹션 ────────────────────────────────────────────────────────────
-  recommendSection: {
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xl,
-    alignItems: 'center',
+  // ─── 검증 칩 ──────────────────────────────────────────────────────────────
+  verifyChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primaryLight,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.micro,
+    marginTop: spacing.micro,
   },
-  recommendLabel: {
-    fontSize: 10,
-    fontWeight: '800' as const,
-    color: colors.tertiary,
-    letterSpacing: 3,
-    textTransform: 'uppercase' as const,
-    marginBottom: spacing.md,
-  },
-  recommendCard: {
-    width: '100%',
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: spacing.radiusLg,
-    padding: spacing.xxl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  recommendBody: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: colors.onSurfaceVariant,
-    textAlign: 'center' as const,
-  },
-  recommendLink: {
-    fontSize: 14,
-    fontWeight: '700' as const,
+  verifyChipText: {
+    ...typography.captionBold,
     color: colors.primary,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.tertiaryFixedDim,
-    paddingBottom: spacing.micro,
   },
 
   // ─── 빈 상태 ──────────────────────────────────────────────────────────────

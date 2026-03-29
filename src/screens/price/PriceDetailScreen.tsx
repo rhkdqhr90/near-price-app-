@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Image,
   ActivityIndicator,
   TextInput,
   Share,
@@ -18,17 +17,17 @@ import type { HomeScreenProps } from '../../navigation/types';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography, PJS } from '../../theme/typography';
-import { formatPrice, formatRelativeTime, fixImageUrl, formatDate } from '../../utils/format';
+import { formatPrice, formatRelativeTime, formatDate } from '../../utils/format';
 import EmptyState from '../../components/common/EmptyState';
 import WifiOffIcon from '../../components/icons/WifiOffIcon';
 import ChevronLeftIcon from '../../components/icons/ChevronLeftIcon';
-import ChevronRightIcon from '../../components/icons/ChevronRightIcon';
 import SearchIcon from '../../components/icons/SearchIcon';
 import ShareIcon from '../../components/icons/ShareIcon';
 import MapPinIcon from '../../components/icons/MapPinIcon';
 import { useVerifications, useVerifyPrice } from '../../hooks/queries/useVerification';
 import { usePriceDetail, useProductPricesByName } from '../../hooks/queries/usePrices';
 import { usePriceTrustScore } from '../../hooks/queries/usePriceTrustScore';
+import { useReactions, useConfirmReaction, useReportReaction } from '../../hooks/queries/useReactions';
 import { useToastStore } from '../../store/toastStore';
 import { useAuthStore } from '../../store/authStore';
 import { useLocationStore } from '../../store/locationStore';
@@ -58,13 +57,16 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputePrice, setDisputePrice] = useState('');
   const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportError, setReportError] = useState<string | null>(null);
   const showToast = useToastStore((s) => s.showToast);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const regionName = useLocationStore((s) => s.regionName);
   const insets = useSafeAreaInsets();
 
   const bottomSpacerStyle = useMemo(
-    () => ({ height: spacing.xxl + insets.bottom }),
+    () => ({ height: spacing.xxl + insets.bottom + 60 }),
     [insets.bottom],
   );
 
@@ -83,8 +85,11 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { data: verifications } = useVerifications(priceId);
   const { data: trustScore } = usePriceTrustScore(priceId);
   const { mutate: verifyPrice, isPending: isVerifying } = useVerifyPrice(priceId);
+  const { data: reactions } = useReactions(priceId);
+  const { mutate: confirmReaction, isPending: isConfirming } = useConfirmReaction(priceId);
+  const { mutate: reportReaction, isPending: isReporting } = useReportReaction(priceId);
 
-  const { data: allPricesData, isLoading: isRankLoading } = useProductPricesByName(price?.product.name ?? '');
+  const { data: allPricesData } = useProductPricesByName(price?.product.name ?? '');
 
   const rankedPrices = useMemo(() => {
     if (!allPricesData) return [];
@@ -92,24 +97,12 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   }, [allPricesData]);
 
   const currentRank = useMemo<number | null>(() => {
-    if (!allPricesData) return null;
+    if (rankedPrices.length === 0) return null;
     const idx = rankedPrices.findIndex(p => p.id === priceId);
     return idx >= 0 ? idx + 1 : null;
-  }, [allPricesData, rankedPrices, priceId]);
+  }, [rankedPrices, priceId]);
 
-  const otherTop2 = useMemo(
-    () => rankedPrices
-      .map((p, idx) => ({ price: p, rank: idx + 1 }))
-      .filter(({ price: p }) => p.id !== priceId)
-      .slice(0, 2),
-    [rankedPrices, priceId],
-  );
 
-  const handleStorePress = useCallback(() => {
-    if (price?.store.id) {
-      navigation.navigate('StoreDetail', { storeId: price.store.id });
-    }
-  }, [navigation, price]);
 
   const hasVerified = verifications?.data?.some(
     (v) => v.verifier?.id === currentUserId,
@@ -166,6 +159,27 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     );
   }, [disputePrice, verifyPrice, showToast]);
 
+  const handleConfirmReaction = useCallback(() => {
+    confirmReaction();
+  }, [confirmReaction]);
+
+  const handleReportSubmit = useCallback(() => {
+    const trimmed = reportReason.trim();
+    if (!trimmed) return;
+    setReportError(null);
+    reportReaction(trimmed, {
+      onSuccess: () => {
+        setShowReportModal(false);
+        setReportReason('');
+        setReportError(null);
+        showToast('신고가 접수됐어요', 'success');
+      },
+      onError: () => {
+        setReportError('신고 처리에 실패했어요. 다시 시도해 주세요.');
+      },
+    });
+  }, [reportReason, reportReaction, showToast]);
+
   const handleShare = useCallback(async () => {
     if (!price) return;
     try {
@@ -187,7 +201,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityRole="button"
             accessibilityLabel="뒤로 가기"
           >
-            <ChevronLeftIcon size={24} color={colors.primary} />
+            <ChevronLeftIcon size={spacing.xxl} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -208,7 +222,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityRole="button"
             accessibilityLabel="뒤로 가기"
           >
-            <ChevronLeftIcon size={24} color={colors.primary} />
+            <ChevronLeftIcon size={spacing.xxl} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <EmptyState
@@ -221,7 +235,6 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     );
   }
 
-  const imageUri = fixImageUrl(price.imageUrl);
   const hasSale = !!(price.saleStartDate && price.saleEndDate);
   const categoryLabel = CATEGORY_LABELS[price.product.category] ?? '기타';
   const priceInt = Math.floor(price.price);
@@ -238,11 +251,11 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           accessibilityRole="button"
           accessibilityLabel="뒤로 가기"
         >
-          <ChevronLeftIcon size={24} color={colors.primary} />
+          <ChevronLeftIcon size={spacing.xxl} color={colors.primary} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <MapPinIcon size={14} color={colors.primary} />
+          <MapPinIcon size={spacing.iconXs} color={colors.primary} />
           <Text style={styles.headerLocationText} numberOfLines={1}>
             {regionName ?? '동네'}
           </Text>
@@ -255,7 +268,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityRole="button"
             accessibilityLabel="검색"
           >
-            <SearchIcon size={22} color={colors.primary} />
+            <SearchIcon size={spacing.iconLg} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerIconBtn}
@@ -263,7 +276,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityRole="button"
             accessibilityLabel="공유하기"
           >
-            <ShareIcon size={22} color={colors.primary} />
+            <ShareIcon size={spacing.iconLg} color={colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -275,21 +288,9 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         bounces
       >
-        {/* ─── 상품 이미지 ─────────────────────────────────────────────── */}
-        <View style={styles.imageWrapper}>
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.productImage}
-              resizeMode="cover"
-              accessible
-              accessibilityLabel={`${price.product.name} 가격표 사진`}
-            />
-          ) : (
-            <View style={styles.imagePlaceholder} accessible accessibilityLabel="사진 없음">
-              <Text style={styles.imagePlaceholderText}>사진 없음</Text>
-            </View>
-          )}
+        {/* ─── 컨텍스트 칩 ─────────────────────────────────────────────── */}
+        <View style={styles.contextChip}>
+          <Text style={styles.contextChipText} numberOfLines={1}>{price.product.name}</Text>
         </View>
 
         {/* ─── 상품 정보 ───────────────────────────────────────────────── */}
@@ -306,15 +307,17 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             )}
           </View>
 
-          {/* 상품명 */}
-          <Text style={styles.productName} numberOfLines={2}>
-            {price.product.name}
-          </Text>
-
           {/* 가격 */}
           <View style={styles.priceRow}>
             <Text style={styles.priceNumber}>{priceFormatted}</Text>
             <Text style={styles.priceUnit}>원</Text>
+            {currentRank !== null && (
+              <View style={[styles.rankBadge, currentRank === 1 && styles.rankBadgeFirst]}>
+                <Text style={[styles.rankBadgeText, currentRank === 1 && styles.rankBadgeFirstText]}>
+                  {currentRank}위
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* 메타 */}
@@ -361,132 +364,30 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
               )}
             </View>
           )}
-        </View>
 
-        {/* ─── 7일 가격 트렌드 카드 ────────────────────────────────────── */}
-        <View style={styles.card}>
-          <View style={styles.trendHeader}>
-            <Text style={styles.cardTitle}>7일 가격 트렌드</Text>
-            {trustScore && (
-              <Text style={styles.trendSubLabel}>
-                30일 최저가 {trustScore.status === 'scored' ? formatPrice(price.price) : '-'}
-              </Text>
-            )}
-          </View>
-          <View style={styles.chartPlaceholder} />
-          <View style={styles.weekDayRow}>
-            {WEEK_DAYS.map((d) => (
-              <Text key={d} style={styles.weekDayLabel}>{d}</Text>
-            ))}
-          </View>
-        </View>
-
-        {/* ─── 매장 가격 순위 카드 ─────────────────────────────────────── */}
-        <View style={styles.card}>
-          <Text style={styles.rankSectionTitle}>매장 가격 순위</Text>
-
-          {/* 현재 매장 (실제 순위) */}
-          <View style={styles.rank1Card}>
-            <View style={styles.rank1TopRow}>
-              <View style={styles.rank1NumCircle}>
-                <Text style={styles.rank1NumText}>{currentRank ?? '-'}</Text>
-              </View>
-              {currentRank === 1 && (
-                <View style={styles.lowestBadge}>
-                  <Text style={styles.lowestBadgeText}>최저가</Text>
-                </View>
-              )}
-            </View>
-
-            {/* 매장 정보 + 가격 가로 배치 */}
-            <View style={styles.rank1MidRow}>
-              <View style={styles.rank1StoreInfo}>
-                <Text style={styles.rank1StoreName}>{price.store.name}</Text>
-                <Text style={styles.rank1SubText} numberOfLines={1}>
-                  {price.store.address}
-                </Text>
-              </View>
-              <View style={styles.rank1PriceBlock}>
-                <Text style={styles.rank1Price}>{formatPrice(price.price)}</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.directionsBtn}
-              onPress={handleStorePress}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="매장 상세 보기"
-            >
-              <Text style={styles.directionsBtnText}>매장 상세 보기</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 다른 매장 순위 */}
-          <View style={styles.rank23Row}>
-            {isRankLoading ? (
-              [2, 3].map((rank) => (
-                <View key={rank} style={styles.rank23Card}>
-                  <View style={styles.rank23Left}>
-                    <View style={styles.rank23NumCircle}>
-                      <Text style={styles.rank23NumText}>{rank}</Text>
-                    </View>
-                    <View style={styles.rank23TextBlock}>
-                      <Text style={styles.rank23StoreName}>-</Text>
-                      <Text style={styles.rank23SubText}>불러오는 중...</Text>
-                    </View>
-                  </View>
-                  <ChevronRightIcon size={18} color={colors.gray400} />
-                </View>
-              ))
-            ) : otherTop2.length > 0 ? (
-              otherTop2.map(({ price: otherPrice, rank }) => (
-                <TouchableOpacity
-                  key={otherPrice.id}
-                  style={styles.rank23Card}
-                  onPress={() => navigation.navigate('PriceDetail', { priceId: otherPrice.id })}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${rank}위 ${otherPrice.store.name} 가격 상세 보기`}
-                >
-                  <View style={styles.rank23Left}>
-                    <View style={styles.rank23NumCircle}>
-                      <Text style={styles.rank23NumText}>{rank}</Text>
-                    </View>
-                    <View style={styles.rank23TextBlock}>
-                      <Text style={styles.rank23StoreName}>{otherPrice.store.name}</Text>
-                      <Text style={styles.rank23SubText}>{formatPrice(otherPrice.price)}</Text>
-                    </View>
-                  </View>
-                  <ChevronRightIcon size={18} color={colors.gray400} />
-                </TouchableOpacity>
-              ))
-            ) : (
-              [
-                { rank: 2, label: '다른 매장을 검색해 보세요' },
-                { rank: 3, label: '가격을 등록해 보세요' },
-              ].map(({ rank, label }) => (
-                <View key={rank} style={styles.rank23Card}>
-                  <View style={styles.rank23Left}>
-                    <View style={styles.rank23NumCircle}>
-                      <Text style={styles.rank23NumText}>{rank}</Text>
-                    </View>
-                    <View style={styles.rank23TextBlock}>
-                      <Text style={styles.rank23StoreName}>-</Text>
-                      <Text style={styles.rank23SubText}>{label}</Text>
-                    </View>
-                  </View>
-                  <ChevronRightIcon size={18} color={colors.gray400} />
-                </View>
-              ))
-            )}
-          </View>
         </View>
 
         {/* ─── 가격 인증 현황 카드 ─────────────────────────────────────── */}
         {(!isOwnPrice || verificationList.length > 0) && (
-          <View style={[styles.card, styles.cardLast]}>
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>가격 인증 현황</Text>
+
+            {/* 검증 비율 바 */}
+            {price.verificationCount > 0 && (
+              <View style={styles.verifyRatioSection}>
+                <View style={styles.verifyRatioBar}>
+                  {price.confirmedCount > 0 && (
+                    <View style={[styles.verifyConfirmedBar, { flex: price.confirmedCount }]} />
+                  )}
+                  {price.disputedCount > 0 && (
+                    <View style={[styles.verifyDisputedBar, { flex: price.disputedCount }]} />
+                  )}
+                </View>
+                <Text style={styles.verifyRatioText}>
+                  맞아요 {price.confirmedCount}명  ·  달라요 {price.disputedCount}명
+                </Text>
+              </View>
+            )}
 
             {verificationList.length === 0 ? (
               <Text style={styles.noVerificationText}>아직 인증한 사람이 없어요</Text>
@@ -529,6 +430,24 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         )}
 
+        {/* ─── 7일 가격 트렌드 카드 ────────────────────────────────────── */}
+        <View style={styles.card}>
+          <View style={styles.trendHeader}>
+            <Text style={styles.cardTitle}>7일 가격 트렌드</Text>
+            {trustScore && (
+              <Text style={styles.trendSubLabel}>
+                30일 최저가 {trustScore.status === 'scored' ? formatPrice(price.price) : '-'}
+              </Text>
+            )}
+          </View>
+          <View style={styles.chartPlaceholder} />
+          <View style={styles.weekDayRow}>
+            {WEEK_DAYS.map((d) => (
+              <Text key={d} style={styles.weekDayLabel}>{d}</Text>
+            ))}
+          </View>
+        </View>
+
         {/* 세일 기간 정보 (있을 때) */}
         {(price.saleStartDate || price.saleEndDate) && (
           <View style={[styles.card, styles.cardLast]}>
@@ -543,6 +462,39 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
         <View style={bottomSpacerStyle} />
       </ScrollView>
+
+      {/* ─── 하단 고정 반응 바 ─────────────────────────────────────────── */}
+      {!isOwnPrice && (
+        <View style={styles.stickyReactionBar}>
+          <TouchableOpacity
+            style={[
+              styles.reactionBtn,
+              reactions?.myReaction === 'confirm' && styles.reactionBtnActive,
+            ]}
+            onPress={handleConfirmReaction}
+            disabled={isConfirming}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`유용해요 ${reactions?.confirmCount ?? 0}명`}
+          >
+            <Text style={[
+              styles.reactionBtnText,
+              reactions?.myReaction === 'confirm' && styles.reactionBtnTextActive,
+            ]}>
+              👍 유용해요 {reactions?.confirmCount ?? 0}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.reactionReportBtn}
+            onPress={() => setShowReportModal(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="신고하기"
+          >
+            <Text style={styles.reactionReportBtnText}>⚑ 신고</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ─── Dispute Modal ───────────────────────────────────────────────── */}
       <Modal
@@ -629,6 +581,89 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* ─── Report Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={showReportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowReportModal(false);
+          setReportReason('');
+          setReportError(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setShowReportModal(false);
+              setReportReason('');
+              setReportError(null);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="모달 닫기"
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>신고하기</Text>
+            <Text style={styles.modalSubtitle}>
+              허위 가격, 부적절한 사진 등 신고 이유를 입력해 주세요.
+            </Text>
+            <TextInput
+              style={styles.disputeInput}
+              placeholder="신고 이유를 입력하세요"
+              placeholderTextColor={colors.gray400}
+              value={reportReason}
+              onChangeText={(v) => {
+                setReportReason(v);
+                if (reportError) setReportError(null);
+              }}
+              autoFocus
+              accessibilityLabel="신고 이유 입력"
+            />
+            {reportError ? (
+              <Text style={styles.disputeErrorText}>{reportError}</Text>
+            ) : null}
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancelBtn]}
+                onPress={() => {
+                  setShowReportModal(false);
+                  setReportReason('');
+                  setReportError(null);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="취소"
+              >
+                <Text style={styles.modalCancelBtnText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalBtn,
+                  styles.modalSubmitBtn,
+                  (!reportReason.trim() || isReporting) && styles.modalBtnDisabled,
+                ]}
+                onPress={handleReportSubmit}
+                disabled={!reportReason.trim() || isReporting}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="신고 제출"
+              >
+                {isReporting ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>신고</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -689,33 +724,19 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
 
-  // ─── 상품 이미지 ───────────────────────────────────────────────────────────
-  imageWrapper: {
-    aspectRatio: 1,
-    borderRadius: spacing.radiusLg,
-    overflow: 'hidden',
-    marginBottom: spacing.xxl,
+  // ─── 컨텍스트 칩 ──────────────────────────────────────────────────────────
+  contextChip: {
+    alignSelf: 'flex-start',
     backgroundColor: colors.surfaceContainerLow,
-    shadowColor: colors.shadowBase,
-    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
-    shadowOpacity: 0.10,
-    shadowRadius: spacing.shadowRadiusXl,
-    elevation: 3,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
+    maxWidth: '80%',
   },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imagePlaceholderText: {
+  contextChipText: {
     ...typography.bodySm,
-    color: colors.gray400,
+    color: colors.onSurfaceVariant,
   },
 
   // ─── 상품 정보 섹션 ────────────────────────────────────────────────────────
@@ -746,12 +767,6 @@ const styles = StyleSheet.create({
   saleBadgeText: {
     ...typography.captionBold,
     color: colors.onErrorContainer,
-  },
-  productName: {
-    ...typography.productDetailTitle,
-    color: colors.primary,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
   },
   priceRow: {
     flexDirection: 'row',
@@ -877,130 +892,24 @@ const styles = StyleSheet.create({
     color: colors.outlineColor,
   },
 
-  // ─── 매장 가격 순위 ───────────────────────────────────────────────────────
-  rankSectionTitle: {
-    ...typography.headingLg,
-    fontFamily: PJS.extraBold,
-    color: colors.primary,
-    marginBottom: spacing.md,
-  },
-  rank1Card: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderWidth: spacing.borderEmphasis,
-    borderColor: colors.tertiaryFixedDim,
-    borderRadius: spacing.radiusLg,
-    padding: spacing.xxl,
-    marginBottom: spacing.md,
-  },
-  rank1TopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  rank1NumCircle: {
-    width: spacing.headerIconSize,
-    height: spacing.headerIconSize,
-    borderRadius: spacing.radiusFull,
-    backgroundColor: colors.tertiaryFixedDim,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rank1NumText: {
-    ...typography.activityCount,
-    fontFamily: PJS.extraBold,
-    color: colors.onTertiary,
-  },
-  lowestBadge: {
-    backgroundColor: colors.tertiary,
-    paddingHorizontal: spacing.badgePadH,
-    paddingVertical: spacing.xs,
-    borderRadius: spacing.radiusFull,
-  },
-  lowestBadgeText: {
-    ...typography.captionBold,
-    color: colors.white,
-  },
-  rank1StoreName: {
-    ...typography.headingLg,
-    color: colors.onBackground,
-    marginBottom: spacing.xs,
-  },
-  rank1SubText: {
-    ...typography.labelMd,
-    color: colors.onSurfaceVariant,
-  },
-  rank1MidRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  rank1StoreInfo: {
-    flex: 1,
-  },
-  rank1PriceBlock: {
-    alignItems: 'flex-end',
-    flexShrink: 0,
-  },
-  rank1Price: {
-    ...typography.price,
-    color: colors.tertiary,
-    fontSize: 22,
-  },
-  directionsBtn: {
-    width: '100%',
-    backgroundColor: colors.tertiary,
-    borderRadius: spacing.radiusMd,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  directionsBtnText: {
-    ...typography.labelMd,
-    color: colors.white,
-  },
-  rank23Row: {
-    gap: spacing.sm,
-  },
-  rank23Card: {
+  // ─── 순위 배지 (인라인) ───────────────────────────────────────────────────
+  rankBadge: {
     backgroundColor: colors.surfaceContainerLow,
-    borderRadius: spacing.radiusLg,
-    padding: spacing.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rank23Left: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  rank23NumCircle: {
-    width: spacing.priceDetailRankCircleSm,
-    height: spacing.priceDetailRankCircleSm,
     borderRadius: spacing.radiusFull,
-    backgroundColor: colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.micro,
+    alignSelf: 'center',
+    marginLeft: spacing.sm,
   },
-  rank23NumText: {
-    ...typography.headingMd,
-    fontFamily: PJS.bold,
-    color: colors.gray700,
+  rankBadgeFirst: {
+    backgroundColor: colors.warning,
   },
-  rank23TextBlock: {
-    flex: 1,
-  },
-  rank23StoreName: {
-    ...typography.labelMd,
-    color: colors.onBackground,
-    marginBottom: spacing.micro,
-  },
-  rank23SubText: {
-    ...typography.labelSm,
+  rankBadgeText: {
+    ...typography.captionBold,
     color: colors.outlineColor,
+  },
+  rankBadgeFirstText: {
+    color: colors.gray900,
   },
 
   // ─── 가격 인증 현황 ───────────────────────────────────────────────────────
@@ -1143,6 +1052,79 @@ const styles = StyleSheet.create({
   },
   modalBtnDisabled: {
     opacity: spacing.disabledOpacity,
+  },
+
+  // ─── 하단 고정 반응 바 ────────────────────────────────────────────────────────
+  stickyReactionBar: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.screenH,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: spacing.borderThin,
+    borderTopColor: colors.surfaceContainer,
+  },
+
+  // ─── 추천/신고 반응 버튼 ────────────────────────────────────────────────────
+  reactionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: spacing.radiusFull,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  reactionBtnActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  reactionBtnText: {
+    ...typography.bodySm,
+    color: colors.gray700,
+    fontFamily: PJS.semiBold,
+  },
+  reactionBtnTextActive: {
+    color: colors.primary,
+  },
+  reactionReportBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: spacing.radiusFull,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  reactionReportBtnText: {
+    ...typography.bodySm,
+    color: colors.gray600,
+    fontFamily: PJS.semiBold,
+  },
+
+  // ─── 검증 비율 바 ───────────────────────────────────────────────────────────
+  verifyRatioSection: {
+    marginBottom: spacing.md,
+  },
+  verifyRatioBar: {
+    flexDirection: 'row',
+    height: 16,
+    borderRadius: spacing.radiusFull,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceContainerLow,
+    marginBottom: spacing.xs,
+  },
+  verifyConfirmedBar: {
+    backgroundColor: colors.success,
+  },
+  verifyDisputedBar: {
+    backgroundColor: colors.danger,
+  },
+  verifyRatioText: {
+    ...typography.caption,
+    color: colors.gray600,
   },
 });
 

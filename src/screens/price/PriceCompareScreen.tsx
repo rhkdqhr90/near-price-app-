@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Modal,
   Share,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { HomeScreenProps } from '../../navigation/types';
 import { colors } from '../../theme/colors';
@@ -102,6 +103,7 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showRadiusDropdown, setShowRadiusDropdown] = useState(false);
+  const [heroImgFailed, setHeroImgFailed] = useState(false);
   const showToast = useToastStore(s => s.showToast);
 
   const { latitude, longitude, radius, setRadius } = useLocationStore();
@@ -152,6 +154,10 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
     };
   }, [filteredPrices]);
 
+  useEffect(() => {
+    setHeroImgFailed(false);
+  }, [priceStats?.heroImageUrl]);
+
   // FlatList에 표시할 TOP_RANK_COUNT 이후 항목 (안정된 배열 참조 유지)
   const remainingPrices = useMemo(
     () => priceStats?.sortedPrices.slice(TOP_RANK_COUNT) ?? [],
@@ -167,8 +173,11 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await refetchPrices();
-    setIsRefreshing(false);
+    try {
+      await refetchPrices();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [refetchPrices]);
 
   const handleWishlistToggle = useCallback(() => {
@@ -234,8 +243,8 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
     [handlePriceCardPress],
   );
 
-  // ─── 상품 히어로 + 순위 헤더 ────────────────────────────────────────────
-  const renderSummaryHeader = useCallback(() => {
+  // ─── 상품 히어로 + 순위 헤더 (useMemo로 JSX 직접 생성 — ListHeaderComponent remount 방지) ───
+  const summaryHeader = useMemo(() => {
     if (!priceStats) return null;
     const { sortedPrices, heroImageUrl, category, allPrices } = priceStats;
     const first = sortedPrices[0];
@@ -250,21 +259,25 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
       <View>
         {/* 히어로 이미지 + 오버레이 배지 */}
         <View style={styles.heroWrapper}>
-          {heroImageUrl ? (
+          {heroImageUrl && !heroImgFailed ? (
             <Image
               source={{ uri: heroImageUrl }}
               style={styles.heroImage}
               resizeMode="cover"
               accessibilityLabel={`${productName} 상품 이미지`}
+              onError={() => setHeroImgFailed(true)}
             />
           ) : (
-            <View style={styles.heroPlaceholder}>
-              <Text style={styles.heroEmoji}>{CATEGORY_EMOJI[category]}</Text>
-            </View>
+            <LinearGradient
+              colors={[colors.primaryDark, colors.primary]}
+              style={styles.heroPlaceholder}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.heroPlaceholderEmojiLg}>{CATEGORY_EMOJI[category]}</Text>
+              <Text style={styles.heroPlaceholderProductName} numberOfLines={1}>{productName}</Text>
+            </LinearGradient>
           )}
-          <View style={styles.heroOverlayBadge}>
-            <Text style={styles.heroOverlayBadgeText}>최저가 갱신</Text>
-          </View>
         </View>
 
         {/* 상품 정보 */}
@@ -294,14 +307,10 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityLabel={`1위 ${first.store.name} ${formatPrice(first.price)}`}
           >
             <View style={styles.rankFirstBadge}>
+              <Text style={styles.rankFirstMedalText}>🥇</Text>
               <Text style={styles.rankFirstBadgeText}>실시간 최저가 1위</Text>
             </View>
             <View style={styles.rankFirstBody}>
-              <View style={styles.rankFirstStoreThumb}>
-                <Text style={styles.rankFirstStoreThumbText}>
-                  {first.store.name.charAt(0)}
-                </Text>
-              </View>
               <View style={styles.rankFirstStoreInfo}>
                 <Text style={styles.rankFirstStoreName} numberOfLines={1}>
                   {first.store.name}
@@ -309,9 +318,17 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
                 {firstDistText !== null && (
                   <Text style={styles.rankFirstDistance}>{firstDistText}</Text>
                 )}
+                {first.verificationCount > 0 && (
+                  <View style={styles.rankFirstVerifyRow}>
+                    {first.confirmedCount > 0 && (
+                      <Text style={styles.rankFirstVerifyConfirm}>✓ 맞아요 {first.confirmedCount}</Text>
+                    )}
+                    {first.disputedCount > 0 && (
+                      <Text style={styles.rankFirstVerifyDispute}>✗ 달라요 {first.disputedCount}</Text>
+                    )}
+                  </View>
+                )}
               </View>
-            </View>
-            <View style={styles.rankFirstPriceBox}>
               <Text style={styles.rankFirstPrice}>{formatPrice(first.price)}</Text>
             </View>
             <TouchableOpacity
@@ -350,6 +367,9 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
                   {second.store.name}
                 </Text>
                 <Text style={styles.rankGridPrice}>{formatPrice(second.price)}</Text>
+                {second.verificationCount > 0 && (
+                  <Text style={styles.rankGridVerify}>✓ {second.verificationCount}명 확인</Text>
+                )}
               </TouchableOpacity>
             )}
             {third && (
@@ -372,6 +392,9 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
                   {third.store.name}
                 </Text>
                 <Text style={styles.rankGridPrice}>{formatPrice(third.price)}</Text>
+                {third.verificationCount > 0 && (
+                  <Text style={styles.rankGridVerify}>✓ {third.verificationCount}명 확인</Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -381,9 +404,9 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
         <PriceTrendChart prices={allPrices} />
       </View>
     );
-  }, [priceStats, productName, handleStorePress, handlePriceCardPress, latitude, longitude]);
+  }, [priceStats, productName, handleStorePress, handlePriceCardPress, latitude, longitude, heroImgFailed, setHeroImgFailed]);
 
-  const renderContent = useCallback(() => {
+  const renderContent = () => {
     if (isPricesLoading) return <SkeletonCard variant="rank" />;
     if (isPricesError) {
       return (
@@ -415,7 +438,7 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
           data={remainingPrices}
           keyExtractor={item => item.id}
           renderItem={renderPriceItem}
-          ListHeaderComponent={renderSummaryHeader}
+          ListHeaderComponent={summaryHeader ?? undefined}
           contentContainerStyle={styles.listContent}
           removeClippedSubviews
           refreshControl={
@@ -432,21 +455,7 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
     return (
       <PriceMapSection prices={priceStats.allPrices} onMarkerPress={handleStorePress} />
     );
-  }, [
-    isPricesLoading,
-    isPricesError,
-    priceStats,
-    prices,
-    viewMode,
-    radius,
-    isRefreshing,
-    handleRefresh,
-    renderPriceItem,
-    refetchPrices,
-    handleStorePress,
-    renderSummaryHeader,
-    remainingPrices,
-  ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -460,7 +469,7 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityRole="button"
             accessibilityLabel="뒤로 가기"
           >
-            <ChevronLeftIcon color={colors.black} />
+            <ChevronLeftIcon size={spacing.xxl} color={colors.black} />
           </TouchableOpacity>
           <View style={styles.headerTitleArea}>
             <Text style={styles.headerTitle}>상품 상세</Text>
@@ -764,34 +773,27 @@ const styles = StyleSheet.create({
   },
   heroImage: {
     width: '100%',
-    height: spacing.priceImageHeight,
+    aspectRatio: 2.5,
     backgroundColor: colors.gray100,
     borderRadius: spacing.radiusXl,
   },
   heroPlaceholder: {
     width: '100%',
     height: spacing.priceImagePlaceholderHeight,
-    backgroundColor: colors.secondaryBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: spacing.radiusXl,
+    overflow: 'hidden',
   },
-  heroEmoji: {
-    fontSize: spacing.avatarInitialFont,
+  heroPlaceholderEmojiLg: {
+    fontSize: spacing.emojiLg,
+    marginBottom: spacing.sm,
   },
-  heroOverlayBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.success,
-    borderRadius: spacing.radiusFull,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.micro,
-  },
-  heroOverlayBadgeText: {
-    ...typography.caption,
-    fontWeight: '700' as const,
+  heroPlaceholderProductName: {
+    ...typography.headingMd,
     color: colors.white,
+    paddingHorizontal: spacing.lg,
+    textAlign: 'center',
   },
   heroInfo: {
     backgroundColor: colors.surface,
@@ -858,8 +860,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    alignSelf: 'flex-start',
-    borderBottomRightRadius: spacing.radiusMd,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  rankFirstMedalText: {
+    fontSize: spacing.iconMd,
   },
   rankFirstBadgeText: {
     ...typography.caption,
@@ -871,26 +877,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  rankFirstStoreThumb: {
-    width: spacing.storeThumbSize,
-    height: spacing.storeThumbSize,
-    borderRadius: spacing.radiusMd,
-    backgroundColor: colors.secondaryBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankFirstStoreThumbText: {
-    ...typography.headingMd,
-    color: colors.gray600,
+    paddingVertical: spacing.md,
   },
   rankFirstStoreInfo: {
     flex: 1,
   },
   rankFirstStoreName: {
-    ...typography.headingMd,
+    ...typography.headingBase,
     color: colors.black,
   },
   rankFirstDistance: {
@@ -898,17 +891,9 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     marginTop: spacing.micro,
   },
-  rankFirstPriceBox: {
-    backgroundColor: colors.gray100,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: spacing.radiusSm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-  },
   rankFirstPrice: {
     ...typography.price,
+    flexShrink: 0,
   },
   rankFirstRouteBtn: {
     flexDirection: 'row',
@@ -973,6 +958,27 @@ const styles = StyleSheet.create({
   rankGridPrice: {
     ...typography.headingMd,
     color: colors.primary,
+  },
+  rankGridVerify: {
+    ...typography.caption,
+    fontFamily: typography.captionBold.fontFamily,
+    color: colors.primary,
+    marginTop: spacing.xs,
+  },
+
+  // ─── 1위 카드 검증 행 ────────────────────────────────────────────────
+  rankFirstVerifyRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  rankFirstVerifyConfirm: {
+    ...typography.captionBold,
+    color: colors.primary,
+  },
+  rankFirstVerifyDispute: {
+    ...typography.captionBold,
+    color: colors.danger,
   },
 
   // ─── 콘텐츠 ─────────────────────────────────────────────────────────

@@ -83,6 +83,8 @@ export const spacing = {
 
   // 아이콘 크기
   iconXs: 14,
+  iconMd: 18,
+  iconLg: 22,
 
   // 뒤로가기 버튼 크기
   backBtnSize: 36,
@@ -131,6 +133,13 @@ export const spacing = {
   fabPlusLineHeight: 32,
   fabOverhang: 20,       // 탭바 상단 돌출 오프셋 (marginTop: -fabOverhang)
 
+  // HomeScreen 전단지 팬 카드 토큰
+  flyerFanWrapH: 120,
+  flyerFanShadowOffsetY: 6,
+  flyerFanShadowOpacity: 0.4,
+  flyerFanShadowRadius: 10,
+  flyerFanElevation: 8,
+
   // FAB 그림자 토큰
   fabShadowOffsetY: 6,
   fabShadowOpacity: 0.4,
@@ -139,4 +148,18 @@ export const spacing = {
 
   // 비활성화 불투명도
   disabledOpacity: 0.6,
+
+  // HomeScreen 피드 카드 이미지 크기
+  feedCardImageSize: 88,
+
+  // WishlistScreen 카드 이미지 크기 (피드보다 작게 — 텍스트 공간 확보)
+  wishlistCardImgSize: 56,
+
+  // 이모지 아이콘 크기
+  emojiLg: 52,
+
+  // LocationSetupScreen 전용 토큰
+  buttonHeight: 52,     // GPS 자동 감지 버튼 / 확인 버튼 높이
+  dragHandleW: 36,      // 바텀 패널 드래그 핸들 너비
+  dragHandleH: 4,       // 바텀 패널 드래그 핸들 높이
 } as const;

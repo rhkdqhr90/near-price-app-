@@ -10,6 +10,7 @@ export const priceKeys = {
   byProduct: (productId: string) => ['prices', 'product', productId] as const,
   byName: (name: string) => ['prices', 'byName', name] as const,
   mine: ['prices', 'my'] as const,
+  byStore: (storeId: string) => ['prices', 'store', storeId] as const,
 };
 
 export const usePriceDetail = (priceId: string) => {
@@ -58,6 +59,14 @@ export const useMyPrices = () => {
     queryKey: priceKeys.mine,
     queryFn: (): Promise<PriceResponse[]> =>
       priceApi.getMy().then(res => res.data.data),
+  });
+};
+
+export const useStorePrices = (storeId: string) => {
+  return useQuery<PaginatedResponse<PriceResponse>>({
+    queryKey: priceKeys.byStore(storeId),
+    queryFn: () => priceApi.getByStore(storeId).then((res) => res.data),
+    enabled: storeId.length > 0,
   });
 };
 
