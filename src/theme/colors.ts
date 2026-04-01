@@ -1,8 +1,8 @@
 export const colors = {
-  primary: '#324e24',          // Deep Olive
-  primaryLight: '#e8f5e0',     // Olive 연한 tint
-  primaryDark: '#496639',      // Primary Container
-  primaryContainer: '#496639', // Primary Container (semantic alias)
+  primary: '#7B5E3A',          // 보리씨앗 갈색
+  primaryLight: '#F5EFE6',     // 연한 크림
+  primaryDark: '#5C4429',      // 어두운 갈색
+  primaryContainer: '#9E7A50', // 중간 갈색
   onPrimary: '#ffffff',        // On Primary
 
   secondaryBg: '#f5f3ee',      // surface-container-low
@@ -61,14 +61,14 @@ export const colors = {
   adText: '#5b4300',
 
   tabBorder: '#F0F0F0',
-  tabIconActive: '#324e24',
-  tabIconInactive: '#8c9e84',  // warm muted sage (olive 팔레트 기반 desaturated)
+  tabIconActive: '#7B5E3A',
+  tabIconInactive: '#A08060',  // warm muted brown (씨앗 팔레트 기반 desaturated)
 
   // Outline ("Ghost Border" — 접근성용 최소 경계선)
   outlineVariant: '#c3c8bb',
 
-  // Ambient Shadow (olive 기반 자연광 그림자)
-  ambientShadow: 'rgba(50, 78, 36, 0.04)',
+  // Ambient Shadow (씨앗 기반 자연광 그림자)
+  ambientShadow: 'rgba(123, 94, 58, 0.04)',
 
   // Card decoration
   cardDivider: '#F5F5F5',
@@ -95,7 +95,7 @@ export const colors = {
   heartBtnBg: 'rgba(0,0,0,0.28)',
   distanceBadgeBg: 'rgba(0,0,0,0.42)',
   priceBadgeBg: 'rgba(255,255,255,0.92)',
-  wishlistImgBg: '#1c2315',       // 찜 카드 이미지 플레이스홀더 배경 (다크 올리브)
+  wishlistImgBg: '#2A1F12',       // 찜 카드 이미지 플레이스홀더 배경 (다크 웜브라운)
   flyerSubtitleText: 'rgba(255,255,255,0.88)',
   flyerSubtitleTextDim: 'rgba(255,255,255,0.55)',
   flyerBannerBg: '#16110c',

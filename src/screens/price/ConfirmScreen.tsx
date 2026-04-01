@@ -156,8 +156,9 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert('알림', '등록할 항목이 없습니다.');
       return;
     }
+    if (isPending) return;
     submitAll(items);
-  }, [items, submitAll]);
+  }, [items, submitAll, isPending]);
 
   const containerStyle = useMemo(
     () => [styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }],

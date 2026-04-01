@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { storage, secureTokenStorage, STORAGE_KEYS } from '../utils/storage';
-import { refreshTokens } from '../api/auth.api';
+import { refreshTokens, authApi } from '../api/auth.api';
 import type { AuthTokens } from '../types/api.types';
 
 // base64url → UTF-8 문자열 수동 디코딩 (서드파티/DOM API 미사용)
@@ -70,6 +70,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    // 서버에 로그아웃 알림 (리프레시 토큰 무효화) — 실패해도 로컬 정리는 진행
+    authApi.logout().catch(noop);
     set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
     secureTokenStorage.clearTokens().catch(noop);
     storage.remove(STORAGE_KEYS.USER).catch(noop);

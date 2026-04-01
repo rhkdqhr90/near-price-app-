@@ -11,6 +11,7 @@ import SkeletonCard from '../../components/common/SkeletonCard';
 import HeartIcon from '../../components/icons/HeartIcon';
 import WifiOffIcon from '../../components/icons/WifiOffIcon';
 import MapPinIcon from '../../components/icons/MapPinIcon';
+import TagIcon from '../../components/icons/TagIcon';
 import { formatPrice, fixImageUrl } from '../../utils/format';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -45,7 +46,13 @@ interface CardImageProps {
 
 const CardImage = React.memo(({ imageUri, productName }: CardImageProps) => {
   const [imgError, setImgError] = useState(false);
-  if (!imageUri || imgError) return null;
+  if (!imageUri || imgError) {
+    return (
+      <View style={styles.cardImgPlaceholder}>
+        <TagIcon size={24} color={colors.gray400} />
+      </View>
+    );
+  }
   return (
     <Image
       source={{ uri: imageUri }}
@@ -352,6 +359,13 @@ const styles = StyleSheet.create({
   cardFillImage: {
     width: spacing.wishlistCardImgSize,
     height: spacing.wishlistCardImgSize,
+  },
+  cardImgPlaceholder: {
+    width: spacing.wishlistCardImgSize,
+    height: spacing.wishlistCardImgSize,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceContainerLow,
   },
   // 콘텐츠 영역 (flex:1 — 이미지 오른쪽 나머지 공간)
   cardBody: {

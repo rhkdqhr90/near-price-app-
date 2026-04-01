@@ -7,6 +7,8 @@ import { AUTH_ENDPOINTS } from './constants';
 export const authApi = {
   kakaoLogin: (dto: KakaoLoginDto) =>
     apiClient.post<AuthTokens>('/auth/kakao', dto),
+
+  logout: () => apiClient.post<void>('/auth/logout'),
 };
 
 // apiClient를 사용하면 client → authStore → auth.api → client 순환 참조 발생.
@@ -15,4 +17,5 @@ export const refreshTokens = (refreshToken: string) =>
   axios.post<RefreshTokenResponse>(
     `${API_BASE_URL}${AUTH_ENDPOINTS.REFRESH}`,
     { refreshToken },
+    { timeout: 10000 },
   );

@@ -21,7 +21,7 @@
       
       <meta-data
       android:name="com.naver.maps.map.NCP_KEY_ID"
-      android:value="tj8tdvye4g"/>
+      android:value="${NAVER_MAP_CLIENT_ID}"/>
 
     <activity
       android:name="com.kakao.sdk.auth.AuthCodeHandlerActivity"

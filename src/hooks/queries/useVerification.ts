@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { verificationApi } from '../../api/verification.api';
 import { priceKeys } from './usePrices';
+import { useAuthStore } from '../../store/authStore';
 import type {
   VerificationListResponse,
   MyVerificationsResponse,
@@ -27,11 +28,14 @@ export const useVerifications = (priceId: string) =>
 /**
  * 내가 검증한 가격 목록 조회
  */
-export const useMyVerifications = () =>
-  useQuery<MyVerificationsResponse>({
+export const useMyVerifications = () => {
+  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
+  return useQuery<MyVerificationsResponse>({
     queryKey: verificationKeys.mine,
     queryFn: () => verificationApi.getMyVerifications().then((res) => res.data),
+    enabled: isLoggedIn,
   });
+};
 
 /**
  * 가격 검증 생성 (맞아요/달라요)

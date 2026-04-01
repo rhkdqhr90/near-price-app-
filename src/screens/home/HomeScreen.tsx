@@ -23,6 +23,7 @@ import { useInfiniteRecentPrices } from '../../hooks/queries/usePrices';
 import { useFlyers } from '../../hooks/queries/useFlyers';
 import { useAddWishlist } from '../../hooks/queries/useWishlist';
 import { useLocationStore } from '../../store/locationStore';
+import { useNetworkStore } from '../../store/networkStore';
 import EmptyState from '../../components/common/EmptyState';
 import SkeletonCard from '../../components/common/SkeletonCard';
 import TagIcon from '../../components/icons/TagIcon';
@@ -143,6 +144,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const listRef = useRef<FlatList>(null);
   const { mutate: addWishlist } = useAddWishlist();
   const { data: flyersData } = useFlyers();
+  const isOffline = useNetworkStore((s) => s.isOffline);
 
   const radiusLabel = radius >= 1000 ? `${Math.round(radius / 1000)}km` : `${radius}m`;
 
@@ -162,6 +164,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteRecentPrices();
+
+  const isOfflineRef = useRef(isOffline);
+  useEffect(() => {
+    const wasOffline = isOfflineRef.current;
+    isOfflineRef.current = isOffline;
+    if (wasOffline && !isOffline) {
+      void refetchRecent();
+    }
+  }, [isOffline, refetchRecent]);
 
   const recentPrices = useMemo(() => {
     const all = recentData?.pages.flatMap(p => p.data) ?? [];
@@ -260,36 +271,38 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             accessibilityLabel={`${featuredCard.productName} 이웃 추천 상품`}
           >
             {/* 이미지 영역 */}
-            <View style={styles.heroImageWrap}>
-              {featuredImageUri && !heroImgFailed ? (
-                <Image
-                  source={{ uri: featuredImageUri }}
-                  style={StyleSheet.absoluteFillObject}
-                  resizeMode="cover"
-                  accessible={true}
-                  accessibilityLabel={`${featuredCard.productName} 상품 이미지`}
-                  onError={() => setHeroImgFailed(true)}
-                />
-              ) : (
-                <LinearGradient
-                  colors={[colors.primaryDark, colors.primary]}
-                  style={[StyleSheet.absoluteFillObject, styles.heroGradientOverlay]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Text style={styles.heroGradientProductName} numberOfLines={2}>
-                    {featuredCard.productName}
-                  </Text>
-                  <Text style={styles.heroGradientPrice}>
-                    {formatPrice(featuredCard.minPrice)}
-                  </Text>
-                </LinearGradient>
-              )}
-              {featuredCard.hasClosingDiscount && (
-                <View style={styles.heroClosingBadge}>
-                  <Text style={styles.heroClosingBadgeText}>마감할인</Text>
-                </View>
-              )}
+            <View style={styles.heroInnerCard}>
+              <View style={styles.heroImageWrap}>
+                {featuredImageUri && !heroImgFailed ? (
+                  <Image
+                    source={{ uri: featuredImageUri }}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                    accessible={true}
+                    accessibilityLabel={`${featuredCard.productName} 상품 이미지`}
+                    onError={() => setHeroImgFailed(true)}
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={[colors.primaryDark, colors.primary]}
+                    style={[StyleSheet.absoluteFillObject, styles.heroGradientOverlay]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={styles.heroGradientProductName} numberOfLines={2}>
+                      {featuredCard.productName}
+                    </Text>
+                    <Text style={styles.heroGradientPrice}>
+                      {formatPrice(featuredCard.minPrice)}
+                    </Text>
+                  </LinearGradient>
+                )}
+                {featuredCard.hasClosingDiscount && (
+                  <View style={styles.heroClosingBadge}>
+                    <Text style={styles.heroClosingBadgeText}>마감할인</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* 텍스트 영역 */}
@@ -676,24 +689,32 @@ const styles = StyleSheet.create({
   heroCard: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    borderRadius: spacing.radiusLg,
-    overflow: 'hidden',
+    borderRadius: spacing.radiusXl,
+    padding: spacing.md,
     backgroundColor: colors.surfaceContainerLowest,
     shadowColor: colors.shadowBase,
-    shadowOffset: { width: 0, height: spacing.shadowOffsetY },
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
     shadowOpacity: 0.08,
-    shadowRadius: spacing.shadowRadiusLg,
+    shadowRadius: spacing.shadowRadiusXl,
     elevation: 4,
-    borderWidth: spacing.borderThin,
-    borderColor: colors.outlineVariant,
   },
   heroCardPressed: {
     opacity: 0.96,
     transform: [{ scale: 0.99 }],
   },
+  heroInnerCard: {
+    borderRadius: spacing.radiusLg,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+    shadowColor: colors.shadowBase,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetY },
+    shadowOpacity: 0.06,
+    shadowRadius: spacing.shadowRadiusSm,
+    elevation: 2,
+  },
   heroImageWrap: {
     overflow: 'hidden',
-    aspectRatio: 2.5,
+    aspectRatio: 16 / 9,
     backgroundColor: colors.surfaceContainerLow,
   },
   heroGradientOverlay: {
@@ -721,7 +742,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   heroClosingBadgeText: {
-    fontSize: 10,
+    fontSize: typography.tabLabel.fontSize,
     fontWeight: '700' as const,
     color: colors.white,
   },
@@ -777,7 +798,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   heroLowestLabel: {
-    fontSize: 9,
+    fontSize: typography.microLabel.fontSize,
     fontWeight: '900' as const,
     color: colors.danger,
     letterSpacing: -0.2,
@@ -829,7 +850,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   flashBadgeText: {
-    fontSize: 10,
+    fontSize: typography.tabLabel.fontSize,
     fontWeight: '900' as const,
     color: colors.onTertiary,
     letterSpacing: 2,
@@ -892,7 +913,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   flyerFanEmoji: {
-    fontSize: 28,
+    fontSize: spacing.emojiMd,
   },
 
   // ─── 피드 카드 (단일 컬럼) ──────────────────────────────────────────
@@ -940,7 +961,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.micro,
   },
   feedDiscountBadgeText: {
-    fontSize: 9,
+    fontSize: typography.microLabel.fontSize,
     fontWeight: '900' as const,
     color: colors.white,
   },

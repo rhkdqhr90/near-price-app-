@@ -97,8 +97,9 @@ apiClient.interceptors.response.use(
         setTokens(newAccess, newRefresh);
         isRefreshing = false;
         processQueue(null, newAccess);
-        // 토큰 갱신 성공 후 UI가 stale 데이터를 유지하지 않도록 전체 캐시 무효화
-        void queryClient.invalidateQueries({});
+        // 토큰 갱신 성공 후 개인정보 포함 쿼리만 무효화 (전체 무효화 시 불필요한 API 폭풍 발생)
+        void queryClient.invalidateQueries({ queryKey: ['wishlists', 'me'] });
+        void queryClient.invalidateQueries({ queryKey: ['prices', 'my'] });
         config.headers.Authorization = `Bearer ${newAccess}`;
         return apiClient(config);
       } catch (err) {

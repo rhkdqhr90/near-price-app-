@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { wishlistKeys } from './useWishlist';
 import type { InfiniteData, QueryKey } from '@tanstack/react-query';
 import { priceApi } from '../../api/price.api';
 import type { PaginatedResponse, PriceResponse, ProductPriceCard } from '../../types/api.types';
@@ -51,6 +52,8 @@ export const useInfiniteRecentPrices = () => {
     getNextPageParam: (lastPage) =>
       lastPage.data.length === lastPage.limit ? lastPage.page + 1 : undefined,
     initialPageParam: 1,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
   });
 };
 
@@ -76,6 +79,7 @@ export const useDeleteMyPrice = () => {
     mutationFn: (priceId: string) => priceApi.remove(priceId).then(() => undefined),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: priceKeys.mine });
+      void queryClient.invalidateQueries({ queryKey: wishlistKeys.mine });
     },
   });
 };

@@ -404,7 +404,7 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
         <PriceTrendChart prices={allPrices} />
       </View>
     );
-  }, [priceStats, productName, handleStorePress, handlePriceCardPress, latitude, longitude, heroImgFailed, setHeroImgFailed]);
+  }, [priceStats, productName, handleStorePress, handlePriceCardPress, latitude, longitude, heroImgFailed]);
 
   const renderContent = () => {
     if (isPricesLoading) return <SkeletonCard variant="rank" />;

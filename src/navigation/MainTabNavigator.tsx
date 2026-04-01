@@ -20,6 +20,7 @@ import SearchScreen from '../screens/home/SearchScreen';
 import PriceCompareScreen from '../screens/price/PriceCompareScreen';
 import PriceDetailScreen from '../screens/price/PriceDetailScreen';
 import StoreDetailScreen from '../screens/price/StoreDetailScreen';
+import StoreInfoScreen from '../screens/price/StoreInfoScreen';
 import StoreSelectScreen from '../screens/price/StoreSelectScreen';
 import StoreRegisterScreen from '../screens/price/StoreRegisterScreen';
 import InputMethodScreen from '../screens/price/InputMethodScreen';
@@ -82,7 +83,12 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen
       name="StoreDetail"
       component={StoreDetailScreen}
-      options={{ title: '매장 상세' }}
+      options={{ headerShown: false }}
+    />
+    <HomeStack.Screen
+      name="StoreInfo"
+      component={StoreInfoScreen}
+      options={{ headerShown: false }}
     />
   </HomeStack.Navigator>
 );
@@ -354,12 +360,14 @@ const styles = StyleSheet.create({
     elevation: spacing.fabShadowElevation,
   },
   fabPlus: {
-    fontFamily: PJS.bold,
+    // fontFamily 미설정 — PJS 폰트의 + 글리프 메트릭이 수직 중앙 어긋남
+    // 시스템 폰트가 + 기호를 정확히 중앙에 렌더링
     fontSize: spacing.fabPlusFontSize,
-    lineHeight: spacing.fabPlusFontSize,
+    lineHeight: spacing.fabPlusLineHeight,
     color: dsColors.white,
-    includeFontPadding: false,   // Android: 폰트 기본 패딩 제거 → 수직 중앙 정렬
-    textAlignVertical: 'center', // Android: 텍스트 수직 중앙 정렬
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    textAlign: 'center',
   },
   fabLabel: {
     ...typography.captionBold,

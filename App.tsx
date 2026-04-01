@@ -27,6 +27,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import Toast from './src/components/common/Toast';
 import OfflineBanner from './src/components/common/OfflineBanner';
 import { colors } from './src/theme/colors';
+import { useNetworkStore } from './src/store/networkStore';
 
 
 function App(): React.JSX.Element {
@@ -38,6 +39,11 @@ function App(): React.JSX.Element {
         setIsBackground(true);
       } else if (nextAppState === 'active') {
         setIsBackground(false);
+        // 포그라운드 복귀 시 오프라인 상태 초기화 → 중단된 쿼리 재시도
+        if (useNetworkStore.getState().isOffline) {
+          useNetworkStore.getState().setOffline(false);
+          void queryClient.invalidateQueries();
+        }
       }
     });
     return () => subscription.remove();

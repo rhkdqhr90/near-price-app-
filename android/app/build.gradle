@@ -102,10 +102,10 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
-        // API 키는 환경 변수에서 읽음 (보안: 하드코딩 방지)
+        // API 키는 .env에서 읽음 (react-native-config dotenv.gradle 경유)
         manifestPlaceholders = [
-            KAKAO_APP_KEY: System.getenv("KAKAO_APP_KEY") ?: "KAKAO_APP_KEY_NOT_SET",
-            NAVER_MAP_CLIENT_ID: System.getenv("NAVER_MAP_CLIENT_ID") ?: "NAVER_MAP_CLIENT_ID_NOT_SET"
+            KAKAO_APP_KEY: project.env.get("KAKAO_APP_KEY") ?: "KAKAO_APP_KEY_NOT_SET",
+            NAVER_MAP_CLIENT_ID: project.env.get("NAVER_MAP_CLIENT_ID") ?: "NAVER_MAP_CLIENT_ID_NOT_SET"
         ]
     }
     signingConfigs {

@@ -52,6 +52,7 @@ export type HomeStackParamList = {
   PriceCompare: { productId: string; productName: string };
   PriceDetail: { priceId: string };
   StoreDetail: { storeId: string };
+  StoreInfo: { storeId: string };
 };
 
 // ─── Price Register Stack ──────────────────────────────────────────────────

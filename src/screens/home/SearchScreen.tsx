@@ -26,6 +26,7 @@ import EmptyState from '../../components/common/EmptyState';
 import LoadingView from '../../components/common/LoadingView';
 import SearchIcon from '../../components/icons/SearchIcon';
 import WifiOffIcon from '../../components/icons/WifiOffIcon';
+import MapPinIcon from '../../components/icons/MapPinIcon';
 import TagIcon from '../../components/icons/TagIcon';
 import StoreIcon from '../../components/icons/StoreIcon';
 import CloseIcon from '../../components/icons/CloseIcon';
@@ -35,7 +36,7 @@ import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { formatPrice, fixImageUrl } from '../../utils/format';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
+import { typography, PJS } from '../../theme/typography';
 
 const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 } as const;
 const MAX_RECENT_SEARCHES = 10;
@@ -70,7 +71,7 @@ const groupSearchPricesByProduct = (prices: PriceResponse[]): SearchPriceCard[] 
   });
 
   return Array.from(map.values())
-    .filter((group) => group[0]?.product?.id)
+    .filter((group) => group.length > 0)
     .map((group) => {
     const sorted = [...group].sort((a, b) => a.price - b.price);
     const cheapest = sorted[0];
@@ -353,7 +354,7 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
       {/* 콘텐츠 */}
       {noLocation ? (
         <EmptyState
-          icon={WifiOffIcon}
+          icon={MapPinIcon}
           title="위치가 설정되지 않았어요"
           subtitle="홈 화면에서 동네를 설정한 후 매장을 검색해 주세요."
         />
@@ -479,7 +480,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     gap: spacing.md,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray200,
   },
   searchBar: {
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...typography.headingMd,
-    fontWeight: '500' as const,
+    fontFamily: PJS.medium,
     color: colors.gray600,
   },
   tabs: {
@@ -511,7 +512,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
     backgroundColor: colors.white,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray200,
   },
   tab: {
@@ -528,8 +529,8 @@ const styles = StyleSheet.create({
     color: colors.gray600,
   },
   tabTextActive: {
+    fontFamily: PJS.semiBold,
     color: colors.white,
-    fontWeight: '600' as const,
   },
 
   // ── 매장 탭 텍스트 리스트 ──
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray100,
   },
   storeIconBox: {
@@ -568,13 +569,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
     backgroundColor: colors.gray100,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray200,
   },
   resultHeaderText: {
     ...typography.caption,
+    fontFamily: PJS.semiBold,
     color: colors.gray600,
-    fontWeight: '600' as const,
   },
 
   // ── 최근 검색어 ──
@@ -587,7 +588,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray100,
   },
   recentTitle: {
@@ -604,7 +605,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: spacing.borderHairline,
     borderBottomColor: colors.gray100,
   },
   recentItemText: {
@@ -629,9 +630,9 @@ const styles = StyleSheet.create({
     borderRadius: spacing.radiusLg,
     overflow: 'hidden',
     shadowColor: colors.tertiaryContainer,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
+    shadowOpacity: spacing.cardShadowOpacity,
+    shadowRadius: spacing.shadowRadiusXl,
     elevation: 3,
   },
   gridCardPressed: {
@@ -656,9 +657,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: spacing.heartBtnXs,
+    height: spacing.heartBtnXs,
+    borderRadius: spacing.radiusFull,
     backgroundColor: colors.heartBtnBg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -673,8 +674,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   storeCountBadgeText: {
-    fontSize: 10,
-    fontWeight: '600' as const,
+    ...typography.tabLabel,
+    fontFamily: PJS.semiBold,
     color: colors.white,
   },
   gridInfo: {
@@ -689,15 +690,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   closingBadgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
+    ...typography.tabLabel,
+    fontFamily: PJS.bold,
     color: colors.danger,
   },
   gridProductName: {
-    fontSize: 13,
-    fontWeight: '700' as const,
+    ...typography.tagText,
+    fontFamily: PJS.bold,
     color: colors.black,
-    lineHeight: 18,
+    lineHeight: spacing.lineHeightSm,
     marginBottom: spacing.xs,
   },
   priceBadge: {
@@ -710,8 +711,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   priceBadgeText: {
-    fontSize: 13,
-    fontWeight: '900' as const,
+    ...typography.tagText,
+    fontFamily: PJS.extraBold,
     color: colors.primary,
   },
   verifiedRow: {
@@ -721,8 +722,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   verifiedText: {
-    fontSize: 10,
-    fontWeight: '600' as const,
+    ...typography.tabLabel,
+    fontFamily: PJS.semiBold,
     color: colors.midnightMint,
   },
   gridStoreRow: {
@@ -731,8 +732,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   gridStoreName: {
-    fontSize: 11,
-    fontWeight: '500' as const,
+    ...typography.caption,
+    fontFamily: PJS.medium,
     color: colors.gray600,
     flex: 1,
   },

@@ -74,6 +74,7 @@ export const spacing = {
   // 랭크 뱃지
   rankBadgeSize: 28,
   heartBtnSm: 30,      // 찜 삭제 버튼 (absolute 원형)
+  heartBtnXs: 28,      // 소형 찜 버튼 (그리드 카드용)
 
   // 테두리 두께
   borderThin: 1,
@@ -149,6 +150,22 @@ export const spacing = {
   // 비활성화 불투명도
   disabledOpacity: 0.6,
 
+  // 헤어라인 구분선 두께 (0.5px — iOS/Android 공통)
+  borderHairline: 0.5,
+
+  // 카드 그림자 불투명도
+  cardShadowOpacityLight: 0.06, // 인라인 카드 (목록 아이템 등 — 가장 은은한 그림자)
+  cardShadowOpacity: 0.08,
+  // 플로팅 요소 그림자 불투명도 (검색바, FAB 등 — 카드보다 약간 강함)
+  floatShadowOpacity: 0.12,
+  // Primary 색상 그림자 불투명도 (확인 버튼 등)
+  primaryShadowOpacity: 0.3,
+
+  // 소형 텍스트 줄간격 (13pt 기준 — tagText/bodySm 계열)
+  lineHeightSm: 18,
+  // 중형 텍스트 줄간격 (13~15pt 계열 — 여러 줄 bodySm 텍스트 등)
+  lineHeightMd: 20,
+
   // HomeScreen 피드 카드 이미지 크기
   feedCardImageSize: 88,
 
@@ -157,9 +174,20 @@ export const spacing = {
 
   // 이모지 아이콘 크기
   emojiLg: 52,
+  emojiMd: 28,       // 전단지 팬 카드 이모지 크기
 
   // LocationSetupScreen 전용 토큰
   buttonHeight: 52,     // GPS 자동 감지 버튼 / 확인 버튼 높이
   dragHandleW: 36,      // 바텀 패널 드래그 핸들 너비
   dragHandleH: 4,       // 바텀 패널 드래그 핸들 높이
+
+  // StoreDetailScreen 전용 토큰
+  reviewInputMinHeight: 80,  // 리뷰 입력창 최소 높이
+  ratingStarSize: 32,        // 별점 선택 별 크기
+
+  // Android Elevation 토큰 (그림자 높이 — 숫자가 클수록 그림자 강함)
+  elevationXs: 2,   // 인라인 목록 카드 (가장 낮은 단계)
+  elevationSm: 4,   // 칩 / 소형 카드
+  elevationMd: 6,   // 검색 컨테이너 / 중형 카드
+  elevationLg: 8,   // 패널 / 대형 카드
 } as const;

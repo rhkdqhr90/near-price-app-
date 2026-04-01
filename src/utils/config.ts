@@ -9,4 +9,4 @@ export const API_BASE_URL =
   Config.API_BASE_URL ??
   (__DEV__ ? 'http://10.0.2.2:3000' : 'https://api.nearprice.kr');
 
-export const APP_VERSION = '0.0.1';
+export const APP_VERSION = '1.0.0';

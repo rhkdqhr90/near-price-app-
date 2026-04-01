@@ -374,10 +374,10 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
         text: '로그아웃',
         style: 'destructive',
         onPress: () => {
+          queryClient.clear();
           clearLocation();
           resetPriceRegister();
           logout();
-          queryClient.clear();
         },
       },
     ]);
@@ -395,10 +395,10 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
           onPress: async () => {
             try {
               await userApi.deleteAccount();
+              queryClient.clear();
               clearLocation();
               resetPriceRegister();
               logout();
-              queryClient.clear();
             } catch {
               Alert.alert(
                 '오류',

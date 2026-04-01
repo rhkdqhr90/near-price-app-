@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -327,6 +328,39 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             {formatRelativeTime(price.createdAt)}
             {price.verificationCount > 0 ? ` · 검증 ${price.verificationCount}명` : ''}
           </Text>
+
+          {/* 등록자 카드 */}
+          {price.user && (
+            <View style={styles.registrantCard}>
+              <View style={styles.registrantAvatar}>
+                {price.user.profileImageUrl ? (
+                  <Image
+                    source={{ uri: price.user.profileImageUrl }}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                    accessibilityLabel={`${price.user.nickname} 프로필 사진`}
+                  />
+                ) : (
+                  <Text style={styles.registrantAvatarInitial}>
+                    {price.user.nickname[0] ?? '?'}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.registrantInfo}>
+                <Text style={styles.registrantName}>{price.user.nickname}</Text>
+                <Text style={styles.registrantMeta}>
+                  {formatRelativeTime(price.createdAt)} · 신뢰점수 {price.user.trustScore}점
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* 본인 등록 가격 칩 */}
+          {isOwnPrice && (
+            <View style={styles.ownPriceChip}>
+              <Text style={styles.ownPriceChipText}>내가 등록한 가격이에요</Text>
+            </View>
+          )}
 
           {/* 맞아요/달라요 버튼 — 본인 등록 아닐 때만 */}
           {!isOwnPrice && (
@@ -790,6 +824,61 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
+  // ─── 등록자 카드 ─────────────────────────────────────────────────────────────
+  registrantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: spacing.radiusMd,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  registrantAvatar: {
+    width: spacing.priceDetailVerifyAvatarSize,
+    height: spacing.priceDetailVerifyAvatarSize,
+    borderRadius: spacing.radiusFull,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  registrantAvatarInitial: {
+    ...typography.headingMd,
+    color: colors.primary,
+    fontWeight: '700' as const,
+  },
+  registrantInfo: {
+    flex: 1,
+  },
+  registrantName: {
+    ...typography.bodyMd,
+    color: colors.onBackground,
+    fontWeight: '600' as const,
+  },
+  registrantMeta: {
+    ...typography.caption,
+    color: colors.gray600,
+    marginTop: spacing.micro,
+  },
+
+  // ─── 본인 등록 가격 칩 ────────────────────────────────────────────────────
+  ownPriceChip: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  ownPriceChipText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600' as const,
+  },
+
   // ─── 맞아요/달라요 버튼 ────────────────────────────────────────────────────
   verifyBtnRow: {
     flexDirection: 'row',
@@ -1110,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   verifyRatioBar: {
     flexDirection: 'row',
-    height: 16,
+    height: spacing.lg,
     borderRadius: spacing.radiusFull,
     overflow: 'hidden',
     backgroundColor: colors.surfaceContainerLow,

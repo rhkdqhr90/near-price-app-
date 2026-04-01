@@ -128,7 +128,7 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
                 ? '가격 정보를 자동으로 인식하지 못했습니다.'
                 : '텍스트를 인식하지 못했습니다.'}
             </Text>
-            <TouchableOpacity style={styles.manualBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="다시 촬영하기">
+            <TouchableOpacity style={styles.manualBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('InputMethod')} accessibilityRole="button" accessibilityLabel="다시 촬영하기">
               <Text style={styles.manualBtnText}>다시 촬영하기</Text>
             </TouchableOpacity>
           </View>

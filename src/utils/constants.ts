@@ -11,3 +11,11 @@ export const AD_BANNER_PLACEHOLDER = {
   storeName: '이마트 광교점',
   info: '이번 주 채소 특가 최대 40%',
 } as const;
+
+export const STORE_TYPE_LABELS: Record<string, string> = {
+  large_mart: '대형마트',
+  mart: '마트',
+  supermarket: '슈퍼마켓',
+  convenience: '편의점',
+  traditional_market: '전통시장',
+};
