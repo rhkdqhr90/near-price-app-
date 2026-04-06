@@ -51,7 +51,7 @@ export const storage = {
     try {
       return JSON.parse(value) as T;
     } catch (err) {
-      console.error(`[storage.get] JSON.parse failed for key: ${key}`, err);
+      if (__DEV__) console.error(`[storage.get] JSON.parse failed for key: ${key}`, err);
       return null;
     }
   },

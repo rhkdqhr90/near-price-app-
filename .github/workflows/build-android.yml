@@ -50,6 +50,7 @@ jobs:
 
       - name: 환경 변수 파일 생성
         run: |
+          set -euo pipefail
           cat > .env << EOF
           ENVIRONMENT=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
           API_BASE_URL=${{ secrets.API_BASE_URL }}
@@ -59,7 +60,28 @@ jobs:
           FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}
           EOF
-          cat .env
+
+      - name: 필수 시크릿 존재 확인
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY }}
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in API_BASE_URL KAKAO_APP_KEY NAVER_MAP_CLIENT_ID KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!key:-}" ]; then
+              echo "[ERROR] required secret missing: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: 린팅
         run: npm run lint
@@ -70,8 +92,25 @@ jobs:
       - name: 안드로이드 폴더 권한 설정
         run: chmod +x android/gradlew
 
+      - name: 빌드 타입 및 버전 결정
+        id: build_config
+        run: |
+          set -euo pipefail
+          # 빌드 타입: workflow_dispatch → 사용자 선택, push main → release, push develop → debug
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.build_type }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "type=release" >> $GITHUB_OUTPUT
+          else
+            echo "type=debug" >> $GITHUB_OUTPUT
+          fi
+
+          # 버전: package.json을 단일 소스로 사용 (앱 UI 표시 버전과 바이너리 버전 일치)
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "version_name=${PKG_VERSION}" >> $GITHUB_OUTPUT
+
       - name: Android 빌드 (Release)
-        if: github.ref == 'refs/heads/main' || github.event.inputs.build_type == 'release'
+        if: steps.build_config.outputs.type == 'release'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -80,8 +119,10 @@ jobs:
           KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY }}
           NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
         run: |
+          set -euo pipefail
           # Keystore 파일 생성
-          echo $KEYSTORE_BASE64 | base64 -d > android/app/release.keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cp android/gradle.properties android/gradle.properties.bak
 
           # 키스토어 서명 설정을 gradle.properties에 추가
           echo "KEYSTORE_PATH=./release.keystore" >> android/gradle.properties
@@ -89,67 +130,72 @@ jobs:
           echo "KEY_ALIAS=${KEY_ALIAS}" >> android/gradle.properties
           echo "KEY_PASSWORD=${KEY_PASSWORD}" >> android/gradle.properties
 
-          # Release 빌드
+          # Google Play 업로드용 AAB 빌드
           cd android
-          ./gradlew clean assembleRelease --no-daemon --stacktrace
+          ./gradlew clean bundleRelease --no-daemon --stacktrace -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=${{ steps.build_config.outputs.version_name }}
 
       - name: Android 빌드 (Debug)
-        if: github.event.inputs.build_type == 'debug'
+        if: steps.build_config.outputs.type == 'debug'
         run: |
+          set -euo pipefail
           cd android
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --stacktrace -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=${{ steps.build_config.outputs.version_name }}
 
-      - name: APK 파일 찾기
-        id: find_apk
+      - name: 빌드 산출물 찾기
+        id: find_artifact
         run: |
-          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            echo "apk_path=android/app/build/outputs/apk/release/app-release.apk" >> $GITHUB_OUTPUT
-            echo "apk_name=near-price-$(date +%Y%m%d-%H%M%S)-release.apk" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          if [ -f "android/app/build/outputs/bundle/release/app-release.aab" ]; then
+            echo "artifact_path=android/app/build/outputs/bundle/release/app-release.aab" >> $GITHUB_OUTPUT
+            echo "artifact_name=near-price-$(date +%Y%m%d-%H%M%S)-release.aab" >> $GITHUB_OUTPUT
+            echo "artifact_type=AAB" >> $GITHUB_OUTPUT
           else
-            echo "apk_path=android/app/build/outputs/apk/debug/app-debug.apk" >> $GITHUB_OUTPUT
-            echo "apk_name=near-price-$(date +%Y%m%d-%H%M%S)-debug.apk" >> $GITHUB_OUTPUT
+            echo "artifact_path=android/app/build/outputs/apk/debug/app-debug.apk" >> $GITHUB_OUTPUT
+            echo "artifact_name=near-price-$(date +%Y%m%d-%H%M%S)-debug.apk" >> $GITHUB_OUTPUT
+            echo "artifact_type=APK" >> $GITHUB_OUTPUT
           fi
 
-      - name: APK 파일 확인
+      - name: 빌드 산출물 확인
         run: |
-          if [ -f "${{ steps.find_apk.outputs.apk_path }}" ]; then
-            ls -lh ${{ steps.find_apk.outputs.apk_path }}
+          set -euo pipefail
+          if [ -f "${{ steps.find_artifact.outputs.artifact_path }}" ]; then
+            ls -lh ${{ steps.find_artifact.outputs.artifact_path }}
           else
-            echo "APK 파일을 찾을 수 없습니다"
-            find android/app/build/outputs -name "*.apk" -ls
+            echo "빌드 산출물을 찾을 수 없습니다"
+            find android/app/build/outputs -name "*.aab" -o -name "*.apk" -ls
             exit 1
           fi
 
-      - name: APK 파일명 변경
+      - name: 빌드 산출물 파일명 변경
         run: |
-          cp ${{ steps.find_apk.outputs.apk_path }} \
-             ${{ steps.find_apk.outputs.apk_name }}
+          set -euo pipefail
+          cp ${{ steps.find_artifact.outputs.artifact_path }} \
+             ${{ steps.find_artifact.outputs.artifact_name }}
 
-      - name: APK 빌드 아티팩트 업로드
+      - name: 빌드 아티팩트 업로드
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.find_apk.outputs.apk_name }}
-          path: ${{ steps.find_apk.outputs.apk_name }}
+          name: ${{ steps.find_artifact.outputs.artifact_name }}
+          path: ${{ steps.find_artifact.outputs.artifact_name }}
           retention-days: 30
 
-      - name: Release 생성 및 APK 업로드
+      - name: Release 생성 및 산출물 업로드
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ steps.find_apk.outputs.apk_name }}
+          files: ${{ steps.find_artifact.outputs.artifact_name }}
           tag_name: android-${{ github.run_number }}
           body: |
-            # NearPrice Android 빌드
+            # NearPrice Android 빌드 산출물
             - **빌드 번호**: ${{ github.run_number }}
             - **커밋**: ${{ github.sha }}
             - **시간**: ${{ github.event.head_commit.timestamp }}
-            - **APK 파일**: ${{ steps.find_apk.outputs.apk_name }}
+            - **산출물 타입**: ${{ steps.find_artifact.outputs.artifact_type }}
+            - **파일**: ${{ steps.find_artifact.outputs.artifact_name }}
 
             ## 설치 방법
-            1. APK 파일을 다운로드합니다
-            2. Android 디바이스에서 파일 관리자로 이동합니다
-            3. APK 파일을 실행하여 설치합니다
-            4. "알 수 없는 출처" 권한 확인이 나오면 허용합니다
+            1. Debug APK는 바로 설치할 수 있습니다.
+            2. Release AAB는 Google Play Console 업로드용입니다.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -166,7 +212,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*NearPrice Android 빌드 성공* ✅\n*APK*: ${{ steps.find_apk.outputs.apk_name }}\n*커밋*: <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                    "text": "*NearPrice Android 빌드 성공* ✅\n*산출물*: ${{ steps.find_artifact.outputs.artifact_name }}\n*커밋*: <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
                   }
                 }
               ]
@@ -185,8 +231,17 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*NearPlace Android 빌드 실패* ❌\n*작업*: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|자세히 보기>"
+                    "text": "*NearPrice Android 빌드 실패* ❌\n*작업*: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|자세히 보기>"
                   }
                 }
               ]
             }
+
+      - name: 민감 파일 정리
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -f .env android/app/release.keystore
+          if [ -f android/gradle.properties.bak ]; then
+            mv android/gradle.properties.bak android/gradle.properties
+          fi
