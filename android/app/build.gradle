@@ -20,6 +20,9 @@ apply plugin: "com.facebook.react"
 apply plugin: "com.google.gms.google-services"
 apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
 
+def versionCodeProp = rootProject.findProperty("VERSION_CODE")
+def versionNameProp = rootProject.findProperty("VERSION_NAME")
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -100,12 +103,15 @@ android {
         applicationId "com.nearpriceapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode versionCodeProp != null ? Integer.parseInt(versionCodeProp.toString()) : 1
+        versionName versionNameProp != null ? versionNameProp.toString() : "1.0.0"
         // API 키는 .env에서 읽음 (react-native-config dotenv.gradle 경유)
+        // Release 빌드에서 필수 키 누락 시 빌드 실패 처리
+        def kakaoKey = project.env.get("KAKAO_APP_KEY") ?: ""
+        def naverMapKey = project.env.get("NAVER_MAP_CLIENT_ID") ?: ""
         manifestPlaceholders = [
-            KAKAO_APP_KEY: project.env.get("KAKAO_APP_KEY") ?: "KAKAO_APP_KEY_NOT_SET",
-            NAVER_MAP_CLIENT_ID: project.env.get("NAVER_MAP_CLIENT_ID") ?: "NAVER_MAP_CLIENT_ID_NOT_SET"
+            KAKAO_APP_KEY: kakaoKey.isEmpty() ? "KAKAO_APP_KEY_NOT_SET" : kakaoKey,
+            NAVER_MAP_CLIENT_ID: naverMapKey.isEmpty() ? "NAVER_MAP_CLIENT_ID_NOT_SET" : naverMapKey
         ]
     }
     signingConfigs {
@@ -137,6 +143,22 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+// Release 빌드에서 필수 API 키 검증 (task-level doFirst)
+afterEvaluate {
+    tasks.matching { it.name =~ /bundle.*Release|assemble.*Release/ }.configureEach { task ->
+        task.doFirst {
+            def kakao = project.env.get("KAKAO_APP_KEY") ?: ""
+            def naver = project.env.get("NAVER_MAP_CLIENT_ID") ?: ""
+            if (kakao.isEmpty() || kakao == "KAKAO_APP_KEY_NOT_SET") {
+                throw new GradleException("KAKAO_APP_KEY is not set in .env — release build aborted")
+            }
+            if (naver.isEmpty() || naver == "NAVER_MAP_CLIENT_ID_NOT_SET") {
+                throw new GradleException("NAVER_MAP_CLIENT_ID is not set in .env — release build aborted")
+            }
         }
     }
 }

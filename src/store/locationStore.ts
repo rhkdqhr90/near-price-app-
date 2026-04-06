@@ -40,7 +40,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         radius: get().radius,
       })
       .catch((err) => {
-        console.error('[locationStore] setLocation 저장 실패', err);
+        if (__DEV__) console.error('[locationStore] setLocation 저장 실패', err);
       });
   },
 
@@ -56,7 +56,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
           radius,
         })
         .catch((err) => {
-          console.error('[locationStore] setRadius 저장 실패', err);
+          if (__DEV__) console.error('[locationStore] setRadius 저장 실패', err);
         });
     }
   },

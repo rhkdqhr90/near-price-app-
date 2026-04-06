@@ -9,4 +9,6 @@ export const API_BASE_URL =
   Config.API_BASE_URL ??
   (__DEV__ ? 'http://10.0.2.2:3000' : 'https://api.nearprice.kr');
 
-export const APP_VERSION = '1.0.0';
+// package.json의 version을 단일 소스로 사용 (gradle versionName과 동기화 필요)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+export const APP_VERSION: string = require('../../package.json').version;
