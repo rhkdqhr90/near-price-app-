@@ -113,6 +113,9 @@ android {
             KAKAO_APP_KEY: kakaoKey.isEmpty() ? "KAKAO_APP_KEY_NOT_SET" : kakaoKey,
             NAVER_MAP_CLIENT_ID: naverMapKey.isEmpty() ? "NAVER_MAP_CLIENT_ID_NOT_SET" : naverMapKey
         ]
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
     }
     signingConfigs {
         debug {
