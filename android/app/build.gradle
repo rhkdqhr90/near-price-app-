@@ -111,7 +111,8 @@ android {
         def naverMapKey = project.env.get("NAVER_MAP_CLIENT_ID") ?: ""
         manifestPlaceholders = [
             KAKAO_APP_KEY: kakaoKey.isEmpty() ? "KAKAO_APP_KEY_NOT_SET" : kakaoKey,
-            NAVER_MAP_CLIENT_ID: naverMapKey.isEmpty() ? "NAVER_MAP_CLIENT_ID_NOT_SET" : naverMapKey
+            NAVER_MAP_CLIENT_ID: naverMapKey.isEmpty() ? "NAVER_MAP_CLIENT_ID_NOT_SET" : naverMapKey,
+            usesCleartextTraffic: "true"
         ]
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
@@ -143,6 +144,7 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
