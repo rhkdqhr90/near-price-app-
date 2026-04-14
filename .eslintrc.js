@@ -1,6 +1,14 @@
 module.exports = {
   root: true,
   extends: '@react-native',
+  overrides: [
+    {
+      files: ['jest.setup.js', '**/*.test.{js,jsx,ts,tsx}', '**/*.spec.{js,jsx,ts,tsx}'],
+      env: {
+        jest: true,
+      },
+    },
+  ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
