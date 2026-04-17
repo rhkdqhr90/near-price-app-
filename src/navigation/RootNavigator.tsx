@@ -12,6 +12,7 @@ import ErrorBoundary from '../components/common/ErrorBoundary';
 import { colors } from '../theme/colors';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const RESTORE_TIMEOUT_MS = 4000;
 
 const RootNavigator: React.FC = () => {
   const { isAuthenticated, restoreAuth } = useAuthStore();
@@ -20,9 +21,28 @@ const RootNavigator: React.FC = () => {
   const [isRestoring, setIsRestoring] = useState(true);
 
   useEffect(() => {
-    Promise.all([restoreAuth(), restoreLocation(), restoreOnboarding()]).finally(() => {
-      setIsRestoring(false);
-    });
+    let cancelled = false;
+
+    const restore = async () => {
+      try {
+        await Promise.race([
+          Promise.all([restoreAuth(), restoreLocation(), restoreOnboarding()]),
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, RESTORE_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        if (!cancelled) {
+          setIsRestoring(false);
+        }
+      }
+    };
+
+    void restore();
+
+    return () => {
+      cancelled = true;
+    };
   }, [restoreAuth, restoreLocation, restoreOnboarding]);
 
   if (isRestoring) {
