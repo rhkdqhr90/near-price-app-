@@ -55,6 +55,12 @@ export const typography = {
     color: colors.primary,
     letterSpacing: -0.3,
   },
+  priceSm: {
+    fontFamily: PJS.extraBold,
+    fontSize: 16,
+    color: colors.primary,
+    letterSpacing: -0.2,
+  },
   tabLabel: {
     fontFamily: PJS.medium,
     fontSize: 10,

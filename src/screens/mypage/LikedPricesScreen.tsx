@@ -148,9 +148,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   priceText: {
-    ...typography.price,
-    fontSize: 16,
-    color: colors.primary,
+    ...typography.priceSm,
   },
   resultBadge: {
     paddingHorizontal: spacing.sm,

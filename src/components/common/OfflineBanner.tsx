@@ -18,7 +18,7 @@ const OfflineBanner: React.FC = () => {
   if (!isOffline) return null;
 
   return (
-    <View style={[styles.container, paddingStyle]} accessible={true} accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel="네트워크 연결이 끊어졌어요">
+    <View style={[styles.container, paddingStyle]} accessible={true} accessibilityRole="alert" accessibilityLiveRegion="polite">
       <WifiOffIcon size={16} color={colors.white} />
       <Text style={styles.text}>네트워크 연결이 끊어졌어요</Text>
     </View>

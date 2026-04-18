@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   kakaoButton: {
     backgroundColor: colors.kakaoYellow,
     borderRadius: spacing.sm,
-    height: 52,
+    height: spacing.buttonHeight,
     justifyContent: 'center',
     alignItems: 'center',
   },

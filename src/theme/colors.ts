@@ -107,7 +107,7 @@ export const colors = {
   // 전단지 상세 헤더 glassmorphism
   flyerDetailHeaderBg: 'rgba(255,253,248,0.95)',
   flyerHeroDateLine: 'rgba(255,255,255,0.40)',
-  flyerHeroDateText: 'rgba(255,255,255,0.97)',
+  flyerHeroDateText: '#ffffff',
 
   // Material 3 on-surface-variant / outline (olive-tinted)
   onSurfaceVariant: '#43483f',   // 보조 텍스트 (olive 팔레트 기반)
