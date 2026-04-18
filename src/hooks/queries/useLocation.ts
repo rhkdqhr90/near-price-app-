@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { naverLocalApi, type NaverGeocodeResult } from '../../api/naver-local.api';
+import { STALE_TIME } from '../../lib/queryClient';
 
 export const locationKeys = {
   region: (lng: number | null, lat: number | null) => ['location', 'region', lng, lat] as const,
@@ -24,7 +25,7 @@ export const useReverseGeocode = (longitude: number | null, latitude: number | n
       return naverLocalApi.coord2Region(longitude, latitude);
     },
     enabled: longitude !== null && latitude !== null,
-    staleTime: 1000 * 60 * 10,
+    staleTime: STALE_TIME.long,
     retry: 1,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 3000),
   });
@@ -43,6 +44,6 @@ export const useGeocodeSearch = (query: string) => {
     queryKey: locationKeys.geocode(query),
     queryFn: (): Promise<NaverGeocodeResult[]> => naverLocalApi.searchAddress(query),
     enabled: query.length >= 2,
-    staleTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME.medium,
   });
 };

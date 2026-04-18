@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { verificationApi } from '../../api/verification.api';
+import { STALE_TIME } from '../../lib/queryClient';
 import type { PriceTrustScoreResponse } from '../../types/api.types';
 
 export const priceTrustScoreKeys = {
@@ -15,5 +16,5 @@ export const usePriceTrustScore = (priceId: string) =>
     queryFn: () =>
       verificationApi.getPriceTrustScore(priceId).then((res) => res.data),
     enabled: !!priceId,
-    staleTime: 30_000, // 30초 — 검증이 실시간으로 변하므로 짧게 설정
+    staleTime: STALE_TIME.realtime,
   });

@@ -115,7 +115,7 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
             >
               <View style={styles.ocrCardColorBar} />
               <View style={styles.ocrCardBody}>
-                <Text style={styles.ocrItemName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.ocrItemName} numberOfLines={2}>{item.name}</Text>
                 <Text style={styles.ocrItemPrice}>{parseInt(item.price, 10).toLocaleString()}원</Text>
               </View>
               <Text style={styles.ocrSelectHint}>선택</Text>

@@ -79,7 +79,7 @@ const groupSearchPricesByProduct = (prices: PriceResponse[]): SearchPriceCard[] 
     return {
       productId: cheapest.product.id,
       productName: cheapest.product.name,
-      unitType: cheapest.product?.unitType ?? 'other',
+      unitType: cheapest.product.unitType ?? 'other',
       storeName: cheapest.store?.name ?? '매장 정보 없음',
       minPrice: Math.min(...priceList),
       maxPrice: Math.max(...priceList),

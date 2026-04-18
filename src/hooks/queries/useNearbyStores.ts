@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { storeApi } from '../../api/store.api';
+import { STALE_TIME } from '../../lib/queryClient';
 import type { NearbyStoreResponse } from '../../types/api.types';
 
 export const storeSearchKeys = {
@@ -21,6 +22,6 @@ export const useNearbyStores = (
       return res.data;
     },
     enabled: latitude !== null && longitude !== null,
-    staleTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME.medium,
   });
 };

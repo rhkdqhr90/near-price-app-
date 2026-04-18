@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from '../../api/user.api';
 import { useNotificationStore } from '../../store/notificationStore';
+import { STALE_TIME } from '../../lib/queryClient';
 
 export const notificationSettingsKeys = {
   settings: (userId: string) => ['notificationSettings', userId] as const,
@@ -14,7 +15,7 @@ export const useNotificationSettingsQuery = (userId: string | undefined) => {
     queryKey: notificationSettingsKeys.settings(userId ?? ''),
     queryFn: () => userApi.getUser(userId ?? ''),
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5분
+    staleTime: STALE_TIME.medium,
     select: (data) => ({
       notifPriceChange: data.notifPriceChange,
       notifPromotion: data.notifPromotion,

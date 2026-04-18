@@ -71,6 +71,8 @@ const styles = StyleSheet.create({
     borderRadius: spacing.radiusMd,
     paddingVertical: spacing.md + spacing.sm,
     paddingHorizontal: spacing.xl + spacing.lg,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   buttonText: {
     ...typography.headingMd,

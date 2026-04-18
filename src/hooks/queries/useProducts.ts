@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productApi } from '../../api/product.api';
+import { STALE_TIME } from '../../lib/queryClient';
 import type {
   ProductResponse,
   CreateProductDto,
@@ -28,7 +29,7 @@ export const useSearchProductsES = (keyword: string) => {
     queryFn: () =>
       productApi.searchProducts(keyword).then(res => res.data),
     enabled: keyword.trim().length > 0,
-    staleTime: 30_000,
+    staleTime: STALE_TIME.realtime,
   });
 };
 

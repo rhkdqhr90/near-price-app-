@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
 import MapViewWrapper from './MapViewWrapper';
@@ -19,6 +19,34 @@ interface Props {
   initialLatitude: number;
   initialLongitude: number;
 }
+
+interface MarkerProps {
+  item: PriceMarkerItem;
+  isMin: boolean;
+  onPress?: (id: string) => void;
+}
+
+const PriceMarker: React.FC<MarkerProps> = React.memo(({ item, isMin, onPress }) => {
+  const handleTap = useCallback(() => onPress?.(item.id), [onPress, item.id]);
+  return (
+    <NaverMapMarkerOverlay
+      latitude={item.latitude}
+      longitude={item.longitude}
+      onTap={handleTap}
+      tintColor={isMin ? colors.danger : colors.primary}
+      caption={{
+        text: formatPrice(item.price),
+        textSize: 12,
+        color: isMin ? colors.danger : colors.primary,
+      }}
+      subCaption={{
+        text: item.storeName,
+        textSize: 10,
+      }}
+    />
+  );
+});
+PriceMarker.displayName = 'PriceMarker';
 
 const PriceMapView: React.FC<Props> = ({
   prices,
@@ -53,21 +81,11 @@ const PriceMapView: React.FC<Props> = ({
       locale="ko"
     >
       {validMarkers.map((p) => (
-        <NaverMapMarkerOverlay
+        <PriceMarker
           key={p.id}
-          latitude={p.latitude}
-          longitude={p.longitude}
-          onTap={() => onMarkerPress?.(p.id)}
-          tintColor={p.price === minPrice ? colors.danger : colors.primary}
-          caption={{
-            text: formatPrice(p.price),
-            textSize: 12,
-            color: p.price === minPrice ? colors.danger : colors.primary,
-          }}
-          subCaption={{
-            text: p.storeName,
-            textSize: 10,
-          }}
+          item={p}
+          isMin={p.price === minPrice}
+          onPress={onMarkerPress}
         />
       ))}
     </MapViewWrapper>

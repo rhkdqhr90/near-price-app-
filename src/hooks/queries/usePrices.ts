@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { wishlistKeys } from './useWishlist';
 import type { InfiniteData, QueryKey } from '@tanstack/react-query';
 import { priceApi } from '../../api/price.api';
+import { STALE_TIME } from '../../lib/queryClient';
 import type { PaginatedResponse, PriceResponse, ProductPriceCard } from '../../types/api.types';
 
 export const priceKeys = {
@@ -52,7 +53,7 @@ export const useInfiniteRecentPrices = () => {
     getNextPageParam: (lastPage) =>
       lastPage.data.length === lastPage.limit ? lastPage.page + 1 : undefined,
     initialPageParam: 1,
-    staleTime: 60_000,
+    staleTime: STALE_TIME.short,
     gcTime: 5 * 60_000,
   });
 };

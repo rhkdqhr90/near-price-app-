@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MyPageScreenProps } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { inquiryApi } from '../../api/inquiry.api';
+import { STALE_TIME } from '../../lib/queryClient';
 import type { CreateInquiryDto, InquiryResponse } from '../../types/api.types';
 import { formatDate } from '../../utils/format';
 import { colors } from '../../theme/colors';
@@ -51,7 +52,7 @@ const InquiryScreen: React.FC<Props> = ({ navigation }) => {
     queryKey: ['inquiries', 'my'],
     queryFn: () => inquiryApi.getMyInquiries().then(r => r.data),
     enabled: activeTab === 'history',
-    staleTime: 1000 * 60,
+    staleTime: STALE_TIME.short,
   });
 
   const handleGoBack = useCallback(() => {

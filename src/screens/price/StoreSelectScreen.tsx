@@ -16,6 +16,7 @@ import { useNearbyStores } from '../../hooks/queries/useNearbyStores';
 import { useNaverPlaceSearch, type NaverPlaceDocument } from '../../hooks/queries/useNaverPlaceSearch';
 import { storeApi } from '../../api/store.api';
 import { isAxiosError } from '../../api/client';
+import { STALE_TIME } from '../../lib/queryClient';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { NaverMapMarkerOverlay, type NaverMapViewRef } from '@mj-studio/react-native-naver-map';
 import MapViewWrapper from '../../components/map/MapViewWrapper';
@@ -99,7 +100,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     queryKey: ['storeSearch', debouncedQuery],
     queryFn: () => storeApi.searchByName(debouncedQuery).then(r => r.data),
     enabled: showSearchResults && debouncedQuery.length >= 2,
-    staleTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME.medium,
   });
 
   // ─── 화면 재진입 시 상태 리셋 + GPS 재요청 ──────────────────────────────
