@@ -93,6 +93,13 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // 403 = 토큰 무효/계정 상태 이상 → 즉시 로그아웃 (재시도 없음)
+    if (error.response?.status === 403) {
+      const { logout } = useAuthStore.getState();
+      queryClient.clear();
+      logout();
+    }
+
     return Promise.reject(error);
   },
 );

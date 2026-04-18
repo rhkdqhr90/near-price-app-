@@ -17,7 +17,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import { NavigationContainer } from '@react-navigation/native';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { queryClient } from './src/lib/queryClient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -39,14 +39,22 @@ function App(): React.JSX.Element {
         setIsBackground(true);
       } else if (nextAppState === 'active') {
         setIsBackground(false);
-        // 포그라운드 복귀 시 오프라인 상태 초기화 → 중단된 쿼리 재시도
+        // 포그라운드 복귀 시 오프라인 플래그만 해제 — 실제 refetch는 onlineManager가 현재 화면 쿼리만 처리
         if (useNetworkStore.getState().isOffline) {
           useNetworkStore.getState().setOffline(false);
-          void queryClient.invalidateQueries();
         }
       }
     });
     return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    // networkStore.isOffline ↔ onlineManager 동기화 → 오프라인 복귀 시 활성(마운트된) 쿼리만 자동 refetch
+    onlineManager.setOnline(!useNetworkStore.getState().isOffline);
+    const unsub = useNetworkStore.subscribe((s) => {
+      onlineManager.setOnline(!s.isOffline);
+    });
+    return unsub;
   }, []);
 
   const handleNavigationReady = useCallback(() => {

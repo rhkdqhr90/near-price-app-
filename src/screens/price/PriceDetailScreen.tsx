@@ -12,6 +12,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { HomeScreenProps } from '../../navigation/types';
@@ -116,6 +117,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       { result: 'confirmed' },
       {
         onSuccess: () => {
+          Vibration.vibrate(30);
           showToast('가격을 확인했어요!', 'success');
         },
         onError: () => {
@@ -148,6 +150,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           setShowDisputeModal(false);
           setDisputePrice('');
           setDisputeError(null);
+          Vibration.vibrate(30);
           showToast('이의 제기가 등록되었어요', 'success');
         },
         onError: (err) => {
@@ -308,6 +311,15 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             )}
           </View>
 
+          {/* 신고 접수 경고 */}
+          {price.reportCount > 0 && (
+            <View style={styles.reportWarning}>
+              <Text style={styles.reportWarningText}>
+                ⚠ 이 가격에 대한 신고가 {price.reportCount}건 접수됐어요. 확인 후 참고해 주세요.
+              </Text>
+            </View>
+          )}
+
           {/* 가격 */}
           <View style={styles.priceRow}>
             <Text style={styles.priceNumber}>{priceFormatted}</Text>
@@ -404,7 +416,27 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         {/* ─── 가격 인증 현황 카드 ─────────────────────────────────────── */}
         {(!isOwnPrice || verificationList.length > 0) && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>가격 인증 현황</Text>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>가격 인증 현황</Text>
+              {trustScore && (
+                <View
+                  style={[
+                    styles.trustBadge,
+                    trustScore.status === 'scored' && styles.trustBadgeScored,
+                    trustScore.status === 'verifying' && styles.trustBadgeVerifying,
+                    trustScore.status === 'new' && styles.trustBadgeNew,
+                  ]}
+                >
+                  <Text style={styles.trustBadgeText}>
+                    {trustScore.status === 'scored' && trustScore.trustScore != null
+                      ? `신뢰도 ${Math.round(trustScore.trustScore)}점`
+                      : trustScore.status === 'verifying'
+                        ? '검증 중'
+                        : '새 가격'}
+                  </Text>
+                </View>
+              )}
+            </View>
 
             {/* 검증 비율 바 */}
             {price.verificationCount > 0 && (
@@ -952,6 +984,45 @@ const styles = StyleSheet.create({
     ...typography.labelMd,
     color: colors.primary,
     marginBottom: spacing.md,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  trustBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: spacing.radiusFull,
+  },
+  trustBadgeScored: {
+    backgroundColor: colors.primaryLight,
+  },
+  trustBadgeVerifying: {
+    backgroundColor: colors.gray100,
+  },
+  trustBadgeNew: {
+    backgroundColor: colors.gray100,
+  },
+  trustBadgeText: {
+    ...typography.bodySm,
+    fontWeight: '600' as const,
+    color: colors.gray700,
+  },
+  reportWarning: {
+    backgroundColor: colors.dangerLight,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.danger,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: spacing.radiusSm,
+    marginBottom: spacing.md,
+  },
+  reportWarningText: {
+    ...typography.bodySm,
+    color: colors.danger,
+    lineHeight: 18,
   },
 
   // ─── 7일 가격 트렌드 ──────────────────────────────────────────────────────

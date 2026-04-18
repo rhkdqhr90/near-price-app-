@@ -109,7 +109,12 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
         {/* 중앙 가이드 프레임과 양옆 반투명 영역 */}
         <View style={styles.guideMiddleRow}>
           <View style={styles.guideDarkArea} />
-          <View style={styles.guideFrame} />
+          <View style={styles.guideFrame}>
+            <View style={[styles.guideCorner, styles.guideCornerTL]} />
+            <View style={[styles.guideCorner, styles.guideCornerTR]} />
+            <View style={[styles.guideCorner, styles.guideCornerBL]} />
+            <View style={[styles.guideCorner, styles.guideCornerBR]} />
+          </View>
           <View style={styles.guideDarkArea} />
         </View>
 
@@ -157,9 +162,40 @@ const styles = StyleSheet.create({
   },
   guideFrame: {
     width: GUIDE_FRAME_WIDTH,
-    borderWidth: 2,
-    borderColor: colors.white,
-    opacity: 0.7,
+  },
+  guideCorner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: colors.primary,
+  },
+  guideCornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 4,
+  },
+  guideCornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 4,
+  },
+  guideCornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 4,
+  },
+  guideCornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 4,
   },
   overlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0,

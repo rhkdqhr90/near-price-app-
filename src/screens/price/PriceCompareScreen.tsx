@@ -291,6 +291,13 @@ const PriceCompareScreen: React.FC<Props> = ({ route, navigation }) => {
           <Text style={styles.heroCheapestStore}>{priceStats.cheapestStore} 최저가</Text>
         </View>
 
+        {/* 크라우드소싱 안내 */}
+        <View style={styles.disclaimerBanner}>
+          <Text style={styles.disclaimerText}>
+            사용자가 직접 등록한 가격이에요. 실제 매장 가격과 다를 수 있어요.
+          </Text>
+        </View>
+
         {/* 마트별 최저가 순위 */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>마트별 최저가 순위</Text>
@@ -826,6 +833,20 @@ const styles = StyleSheet.create({
   heroCheapestStore: {
     ...typography.bodySm,
     color: colors.gray600,
+  },
+  // ─── 크라우드소싱 안내 ─────────────────────────────────────────────
+  disclaimerBanner: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primaryLight,
+    borderRadius: spacing.radiusSm,
+  },
+  disclaimerText: {
+    ...typography.caption,
+    color: colors.primary,
+    lineHeight: 18,
   },
   // ─── 섹션 헤더 ───────────────────────────────────────────────────────
   sectionHeader: {

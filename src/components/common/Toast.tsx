@@ -48,8 +48,7 @@ const Toast: React.FC = () => {
     }
   }, [visible, opacity, translateY]);
 
-  const bottomOffset =
-    insets.bottom + spacing.tabBarContentHeight + spacing.fabBottom + spacing.fabSize + spacing.md;
+  const bottomOffset = insets.bottom + spacing.tabBarContentHeight + spacing.md;
 
   const dynamicStyle = useMemo(
     () => ({ bottom: bottomOffset, backgroundColor: TOAST_BG[type] }),

@@ -23,7 +23,6 @@ import { useInfiniteRecentPrices } from '../../hooks/queries/usePrices';
 import { useFlyers } from '../../hooks/queries/useFlyers';
 import { useAddWishlist } from '../../hooks/queries/useWishlist';
 import { useLocationStore } from '../../store/locationStore';
-import { useNetworkStore } from '../../store/networkStore';
 import EmptyState from '../../components/common/EmptyState';
 import SkeletonCard from '../../components/common/SkeletonCard';
 import TagIcon from '../../components/icons/TagIcon';
@@ -144,7 +143,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const listRef = useRef<FlatList>(null);
   const { mutate: addWishlist } = useAddWishlist();
   const { data: flyersData } = useFlyers();
-  const isOffline = useNetworkStore((s) => s.isOffline);
 
   const radiusLabel = radius >= 1000 ? `${Math.round(radius / 1000)}km` : `${radius}m`;
 
@@ -164,15 +162,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteRecentPrices();
-
-  const isOfflineRef = useRef(isOffline);
-  useEffect(() => {
-    const wasOffline = isOfflineRef.current;
-    isOfflineRef.current = isOffline;
-    if (wasOffline && !isOffline) {
-      void refetchRecent();
-    }
-  }, [isOffline, refetchRecent]);
 
   const recentPrices = useMemo(() => {
     const all = recentData?.pages.flatMap(p => p.data) ?? [];
