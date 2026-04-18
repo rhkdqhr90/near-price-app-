@@ -145,14 +145,30 @@ const LocationSetupScreen = ({ navigation, route }: Props) => {
       return;
     }
     setIsGpsLoading(true);
+    // 안전망: 동일 좌표 재요청 시 useReverseGeocode가 재실행되지 않아 로딩이 해제되지 않는 케이스 대비
+    const safetyTimer = setTimeout(() => {
+      if (isMountedRef.current) setIsGpsLoading(false);
+    }, 20000);
     Geolocation.getCurrentPosition(
       (position) => {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current) {
+          clearTimeout(safetyTimer);
+          return;
+        }
         const { latitude, longitude } = position.coords;
+        const isSameCoord =
+          gpsLatLng !== null && gpsLatLng.lat === latitude && gpsLatLng.lng === longitude;
         setGpsLatLng({ lat: latitude, lng: longitude });
-        invalidateAndRefetch().catch(() => {});
+        invalidateAndRefetch()
+          .catch(() => {})
+          .finally(() => {
+            clearTimeout(safetyTimer);
+            // 동일 좌표면 useEffect(resultKey)가 스킵되므로 여기서 직접 해제
+            if (isSameCoord && isMountedRef.current) setIsGpsLoading(false);
+          });
       },
       () => {
+        clearTimeout(safetyTimer);
         if (!isMountedRef.current) return;
         setIsGpsLoading(false);
         setInlineError('현재 위치를 가져올 수 없습니다. 주소를 직접 검색해 주세요.');
@@ -164,7 +180,7 @@ const LocationSetupScreen = ({ navigation, route }: Props) => {
         forceRequestLocation: true,
       },
     );
-  }, [requestLocationPermission, invalidateAndRefetch]);
+  }, [requestLocationPermission, invalidateAndRefetch, gpsLatLng]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);

@@ -25,24 +25,25 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}> = [];
-const MAX_FAILED_QUEUE_SIZE = 10;
+// 동시 401 발생 시 단일 refresh만 실행하도록 Promise 공유
+// 주의: refresh 응답 body에는 accessToken/refreshToken이 포함되므로 절대 로깅 금지
+let refreshPromise: Promise<string> | null = null;
 
-const processQueue = (error: unknown, token: string | null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else if (token !== null) {
-      prom.resolve(token);
-    } else {
-      prom.reject(new Error('토큰 갱신 실패'));
-    }
-  });
-  failedQueue = [];
+const performTokenRefresh = async (): Promise<string> => {
+  const { refreshToken, setTokens } = useAuthStore.getState();
+  if (!refreshToken) {
+    throw new Error('리프레시 토큰이 없습니다.');
+  }
+  const res = await axios.post<{
+    accessToken: string;
+    refreshToken: string;
+  }>(`${API_BASE_URL}${AUTH_ENDPOINTS.REFRESH}`, { refreshToken }, { timeout: 10000 });
+  const { accessToken: newAccess, refreshToken: newRefresh } = res.data;
+  setTokens(newAccess, newRefresh);
+  // 토큰 갱신 성공 후 개인정보 포함 쿼리만 무효화 (전체 무효화 시 불필요한 API 폭풍 발생)
+  void queryClient.invalidateQueries({ queryKey: ['wishlists', 'me'] });
+  void queryClient.invalidateQueries({ queryKey: ['prices', 'my'] });
+  return newAccess;
 };
 
 apiClient.interceptors.response.use(
@@ -64,47 +65,27 @@ apiClient.interceptors.response.use(
     const config = error.config as RetryConfig;
 
     if (error.response?.status === 401 && !config._retry) {
-      if (isRefreshing) {
-        if (failedQueue.length >= MAX_FAILED_QUEUE_SIZE) {
-          return Promise.reject(new Error('요청 대기열이 가득 찼습니다.'));
-        }
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then((token) => {
-          config._retry = true;
-          config.headers.Authorization = `Bearer ${token}`;
-          return apiClient(config);
-        });
-      }
-
       config._retry = true;
-      isRefreshing = true;
 
-      const { refreshToken, setTokens, logout } = useAuthStore.getState();
-
+      const { refreshToken, logout } = useAuthStore.getState();
       if (!refreshToken) {
         queryClient.clear();
         logout();
         return Promise.reject(error);
       }
 
+      // 단일 refresh promise를 공유해 동시 401을 하나의 갱신 요청으로 합침
+      if (!refreshPromise) {
+        refreshPromise = performTokenRefresh().finally(() => {
+          refreshPromise = null;
+        });
+      }
+
       try {
-        const res = await axios.post<{
-          accessToken: string;
-          refreshToken: string;
-        }>(`${API_BASE_URL}${AUTH_ENDPOINTS.REFRESH}`, { refreshToken }, { timeout: 10000 });
-        const { accessToken: newAccess, refreshToken: newRefresh } = res.data;
-        setTokens(newAccess, newRefresh);
-        isRefreshing = false;
-        processQueue(null, newAccess);
-        // 토큰 갱신 성공 후 개인정보 포함 쿼리만 무효화 (전체 무효화 시 불필요한 API 폭풍 발생)
-        void queryClient.invalidateQueries({ queryKey: ['wishlists', 'me'] });
-        void queryClient.invalidateQueries({ queryKey: ['prices', 'my'] });
+        const newAccess = await refreshPromise;
         config.headers.Authorization = `Bearer ${newAccess}`;
         return apiClient(config);
       } catch (err) {
-        isRefreshing = false;
-        processQueue(err, null);
         queryClient.clear();
         logout();
         return Promise.reject(err);

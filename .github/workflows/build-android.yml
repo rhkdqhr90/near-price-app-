@@ -77,10 +77,11 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           set -euo pipefail
           missing=0
-          for key in API_BASE_URL KAKAO_APP_KEY NAVER_MAP_CLIENT_ID KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          for key in API_BASE_URL KAKAO_APP_KEY NAVER_MAP_CLIENT_ID KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD GOOGLE_SERVICES_JSON_BASE64; do
             if [ -z "${!key:-}" ]; then
               echo "[ERROR] required secret missing: $key"
               missing=1
@@ -89,6 +90,13 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
+
+      - name: google-services.json 복원
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > android/app/google-services.json
 
       - name: 린팅
         run: npm run lint
@@ -253,7 +261,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          rm -f .env android/app/release.keystore
+          rm -f .env android/app/release.keystore android/app/google-services.json
           if [ -f android/gradle.properties.bak ]; then
             mv android/gradle.properties.bak android/gradle.properties
           fi

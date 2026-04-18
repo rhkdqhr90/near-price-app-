@@ -16,6 +16,7 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
   const device = useCameraDevice('back');
   const { hasPermission, requestPermission } = useCameraPermission();
   const shutterScaleRef = useRef(new Animated.Value(1)).current;
+  const isCapturingRef = useRef(false);
 
   const handleRequestPermission = useCallback(async () => {
     const granted = await requestPermission();
@@ -48,12 +49,17 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleTakePhoto = useCallback(async () => {
     if (!cameraRef.current) return;
+    if (isCapturingRef.current) return;
+    isCapturingRef.current = true;
     animateShutterPress();
     try {
       const photo = await cameraRef.current.takePhoto();
       navigation.navigate('OcrResult', { imageUri: `file://${photo.path}` });
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.warn('[CameraScreen] takePhoto 실패', err);
       Alert.alert('오류', '사진 촬영에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      isCapturingRef.current = false;
     }
   }, [navigation, animateShutterPress]);
 

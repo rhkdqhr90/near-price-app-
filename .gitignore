@@ -40,6 +40,10 @@ local.properties
 .env.local
 .env.*.local
 
+# Firebase config (API 키 포함 — CI에서 GOOGLE_SERVICES_JSON_BASE64 시크릿으로 복원)
+android/app/google-services.json
+ios/GoogleService-Info.plist
+
 # node.js
 #
 node_modules/

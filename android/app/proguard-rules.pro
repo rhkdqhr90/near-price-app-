@@ -22,6 +22,24 @@
 # Sentry
 -keep class io.sentry.** { *; }
 
+# Reanimated / Worklets (네이티브 메서드 reflection 사용)
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.swmansion.worklets.** { *; }
+-keep class com.facebook.react.turbomodule.** { *; }
+
+# Gesture Handler
+-keep class com.swmansion.gesturehandler.** { *; }
+
+# react-native-screens
+-keep class com.swmansion.rnscreens.** { *; }
+
+# react-native-geolocation-service
+-keep class com.agontuk.RNFusedLocation.** { *; }
+
+# react-native-config
+-keep class com.lugg.RNCConfig.** { *; }
+
 -dontwarn com.kakao.**
 -dontwarn com.naver.maps.**
 -dontwarn com.google.mlkit.**
+-dontwarn com.swmansion.**
