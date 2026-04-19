@@ -1,5 +1,6 @@
 # Keep runtime metadata used by Android/React Native reflection paths.
 -keepattributes Signature,InnerClasses,EnclosingMethod,*Annotation*
+-keepattributes RuntimeVisibleAnnotations,RuntimeVisibleParameterAnnotations,AnnotationDefault
 
 # React Native / JNI bridge
 -keep class com.facebook.react.** { *; }
@@ -13,6 +14,35 @@
 # Kakao + Naver SDKs
 -keep class com.kakao.** { *; }
 -keep class com.naver.maps.** { *; }
+
+# Retrofit/OkHttp metadata required by Kakao SDK reflective API calls.
+# Rules below follow Square's official Retrofit R8 full-mode guidance:
+# https://github.com/square/retrofit/blob/trunk/retrofit/src/main/resources/META-INF/proguard/retrofit2.pro
+-keepattributes RuntimeInvisibleAnnotations,RuntimeInvisibleParameterAnnotations
+
+-keep class retrofit2.** { *; }
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+
+# Keep Retrofit service method parameters
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+
+# R8 full mode: keep interfaces declaring @GET/@POST/etc so Retrofit can Proxy them
+-if interface * { @retrofit2.http.* <methods>; }
+-keep,allowobfuscation interface <1>
+
+# R8 full mode strips generic signatures from non-kept types — keep Retrofit generics
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+
+# Retrofit Kotlin extension helpers
+-dontwarn retrofit2.KotlinExtensions
+-dontwarn retrofit2.KotlinExtensions$*
+-dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+-dontwarn javax.annotation.**
 
 # Firebase + ML Kit wrappers
 -keep class com.google.firebase.** { *; }
@@ -44,3 +74,6 @@
 -dontwarn com.naver.maps.**
 -dontwarn com.google.mlkit.**
 -dontwarn com.swmansion.**
+-dontwarn retrofit2.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
