@@ -48,8 +48,13 @@ export const spacing = {
   imagePreviewH: 220,     // OCR 결과 화면 이미지 미리보기 높이
 
   // 지도 미리보기 높이
-  storeMapH: 200,           // StoreSelectScreen 지도 높이
+  storeMapH: 260,           // StoreSelectScreen 지도 높이 (레퍼런스 기준)
   locationMapPreviewH: 200, // LocationSetupScreen 지도 미리보기 높이
+
+  // StoreSelectScreen 매장 리스트 카드
+  storeCatBadgeSize: 34,    // 카테고리 컬러 뱃지 (34×34 radius10)
+  storeListCardRadius: 12,  // 매장 카드 radius
+  storeMapSearchBarH: 38,   // 지도 상단 검색바/핀 버튼 높이
 
   // 미세 간격 / 아이콘 크기
   micro: 2,               // 가장 작은 단위 간격 (카드 텍스트 라인 간격 등)

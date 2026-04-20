@@ -5,12 +5,19 @@ import type { PriceRegisterScreenProps } from '../../navigation/types';
 import { usePriceRegisterStore } from '../../store/priceRegisterStore';
 import CameraIcon from '../../components/icons/CameraIcon';
 import EditIcon from '../../components/icons/EditIcon';
+import MapPinIcon from '../../components/icons/MapPinIcon';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
+import { typography, PJS } from '../../theme/typography';
 
 type Props = PriceRegisterScreenProps<'InputMethod'>;
 
+/**
+ * 가격 등록 — 입력 방식 선택 화면.
+ * 레퍼런스 `마실 2/screens-register.jsx` RegisterMethod 기반.
+ * - STEP 2/3 kicker + 매장 핀 pill
+ * - 카드 2개 세로 스택 (다크 카메라 / 라이트 수동)
+ */
 const InputMethodScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const storeName = usePriceRegisterStore(s => s.storeName);
@@ -24,29 +31,58 @@ const InputMethodScreen: React.FC<Props> = ({ navigation }) => {
   }, [navigation]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.md,
+        },
+      ]}
+    >
+      {/* 헤더 영역: STEP + 제목 + 매장 핀 */}
       <View style={styles.header}>
-        <Text style={styles.storeLabel}>선택한 매장</Text>
-        <Text style={styles.storeName} numberOfLines={1}>{storeName ?? ''}</Text>
+        <Text style={styles.kicker}>STEP 2 / 3</Text>
+        <Text style={styles.title}>어떻게 등록할까요?</Text>
+        {storeName ? (
+          <View style={styles.storePill}>
+            <MapPinIcon size={spacing.iconXs} color={colors.primary} />
+            <Text style={styles.storePillText} numberOfLines={1}>{storeName}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <Text style={styles.title}>어떻게 등록할까요?</Text>
-
+      {/* 카드 2개: 세로 스택 */}
       <View style={styles.cards}>
-        <TouchableOpacity style={styles.methodCard} onPress={handleCamera} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="사진으로 등록">
-          <View style={styles.iconWrap}>
-            <CameraIcon size={32} color={colors.primary} />
+        {/* 1. 사진으로 등록 — 다크 카드 (RECOMMENDED) */}
+        <TouchableOpacity
+          style={styles.cameraCard}
+          onPress={handleCamera}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="사진으로 등록 (추천)"
+        >
+          {/* 우하단 primary-tinted circle decoration */}
+          <View style={styles.cameraDecoration} pointerEvents="none" />
+          <View style={styles.cameraContent}>
+            <CameraIcon size={spacing.xxl + spacing.sm} color={colors.white} />
+            <Text style={styles.recommendBadge}>RECOMMENDED</Text>
+            <Text style={styles.cameraTitle}>사진으로 등록</Text>
+            <Text style={styles.cameraDesc}>가격표 한 장이면 자동 인식</Text>
           </View>
-          <Text style={styles.methodTitle}>사진으로 등록</Text>
-          <Text style={styles.methodDesc}>가격표를 촬영하면{'\n'}자동으로 인식해요</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.methodCard} onPress={handleManual} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="직접 입력">
-          <View style={styles.iconWrap}>
-            <EditIcon size={32} color={colors.primary} />
-          </View>
-          <Text style={styles.methodTitle}>직접 입력</Text>
-          <Text style={styles.methodDesc}>상품명과 가격을{'\n'}직접 입력해요</Text>
+        {/* 2. 직접 입력 — 라이트 카드 */}
+        <TouchableOpacity
+          style={styles.manualCard}
+          onPress={handleManual}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="직접 입력"
+        >
+          <EditIcon size={spacing.xxl + spacing.xs} color={colors.onBackground} />
+          <Text style={styles.manualTitle}>직접 입력</Text>
+          <Text style={styles.manualDesc}>품목 하나씩 꼼꼼히 입력</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -54,38 +90,111 @@ const InputMethodScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray100 },
-  header: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
-  },
-  storeLabel: { ...typography.bodySm, fontWeight: '500' as const, color: colors.gray600, marginBottom: spacing.micro },
-  storeName: { ...typography.headingMd },
-  title: { ...typography.headingXl, paddingHorizontal: spacing.xl, paddingTop: spacing.xl + spacing.lg + spacing.md, paddingBottom: spacing.lg },
-  cards: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.md },
-  methodCard: {
+  container: {
     flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: spacing.radiusLg,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
-    padding: spacing.xxl,
-    alignItems: 'center',
+    backgroundColor: colors.surface,
   },
-  iconWrap: {
-    width: spacing.cameraControlSize + spacing.md + spacing.md,
-    height: spacing.cameraControlSize + spacing.md + spacing.md,
-    borderRadius: spacing.radiusLg,
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+  },
+  kicker: {
+    ...typography.tabLabel,
+    fontFamily: PJS.extraBold,
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  title: {
+    ...typography.headingXl,
+    marginTop: spacing.xs,
+    color: colors.onBackground,
+    letterSpacing: -0.5,
+  },
+  storePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.sm,
     backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md + spacing.sm,
+    borderRadius: spacing.radiusMd,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.md,
   },
-  methodTitle: { ...typography.headingMd, marginBottom: spacing.sm, textAlign: 'center' },
-  methodDesc: { ...typography.bodySm, textAlign: 'center', lineHeight: spacing.xl },
+  storePillText: {
+    ...typography.caption,
+    fontFamily: PJS.bold,
+    color: colors.primary,
+  },
+
+  cards: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+
+  // ── 카메라 (다크 카드) ──
+  cameraCard: {
+    width: '100%',
+    padding: spacing.xl,
+    backgroundColor: colors.black,
+    borderRadius: spacing.radiusHero,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cameraDecoration: {
+    position: 'absolute',
+    right: -spacing.xl,
+    bottom: -spacing.xxl - spacing.xs,
+    width: 120,
+    height: 120,
+    borderRadius: spacing.radiusFull,
+    backgroundColor: colors.primary,
+    opacity: 0.27,
+  },
+  cameraContent: {
+    position: 'relative',
+  },
+  recommendBadge: {
+    ...typography.tabLabel,
+    fontFamily: PJS.extraBold,
+    color: colors.primary,
+    letterSpacing: 1.5,
+    marginTop: spacing.lg,
+  },
+  cameraTitle: {
+    ...typography.headingXl,
+    color: colors.white,
+    marginTop: spacing.xs,
+    letterSpacing: -0.4,
+  },
+  cameraDesc: {
+    ...typography.bodySm,
+    color: colors.white,
+    opacity: 0.8,
+    marginTop: spacing.xs,
+  },
+
+  // ── 수동 (라이트 카드) ──
+  manualCard: {
+    width: '100%',
+    padding: spacing.xl,
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusHero,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.gray200,
+  },
+  manualTitle: {
+    ...typography.headingXl,
+    color: colors.onBackground,
+    marginTop: spacing.lg,
+    letterSpacing: -0.4,
+  },
+  manualDesc: {
+    ...typography.bodySm,
+    color: colors.gray600,
+    marginTop: spacing.xs,
+  },
 });
 
 export default InputMethodScreen;

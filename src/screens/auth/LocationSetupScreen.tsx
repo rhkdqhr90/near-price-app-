@@ -178,7 +178,7 @@ const LocationSetupScreen = ({ navigation, route }: Props) => {
         forceRequestLocation: true,
       },
     );
-  }, [requestLocationPermission, invalidateAndRefetch, gpsLatLng]);
+  }, [requestLocationPermission, invalidateAndRefetch]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);

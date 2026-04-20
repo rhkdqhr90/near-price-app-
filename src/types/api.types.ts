@@ -312,6 +312,15 @@ export interface VerificationResponse {
   createdAt: string;
 }
 
+export interface MyVerificationByPriceResponse {
+  id: string;
+  priceId: string;
+  result: VerificationResult;
+  actualPrice: number | null;
+  newPriceId: string | null;
+  createdAt: string;
+}
+
 export interface MyVerificationItem {
   id: string;
   priceId: string;

@@ -20,6 +20,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { useToastStore } from '../../store/toastStore';
 import { getUnitLabel } from '../../utils/unitLabel';
+import { getErrorMessage } from '../../utils/apiError';
 
 type Props = PriceRegisterScreenProps<'Confirm'>;
 
@@ -35,6 +36,7 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     mutationFn: async (confirmItems: ConfirmItem[]) => {
       if (!storeId) throw new Error('매장 정보가 없습니다.');
       let failedCount = 0;
+      let firstErrorMessage: string | null = null;
       for (let i = 0; i < confirmItems.length; i++) {
         if (succeededIndicesRef.current.includes(i)) continue;
         const item = confirmItems[i];
@@ -78,12 +80,19 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
           };
           await priceApi.create(dto);
           succeededIndicesRef.current.push(i);
-        } catch {
+        } catch (error) {
           failedCount += 1;
+          if (!firstErrorMessage) {
+            firstErrorMessage = getErrorMessage(error);
+          }
         }
       }
       if (failedCount > 0) {
-        throw new Error(`${failedCount}개 항목 등록 실패`);
+        throw new Error(
+          firstErrorMessage
+            ? `${failedCount}개 항목 등록 실패: ${firstErrorMessage}`
+            : `${failedCount}개 항목 등록 실패`,
+        );
       }
     },
     onSuccess: () => {
@@ -96,12 +105,16 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
         reset();
       });
     },
-    onError: () => {
+    onError: (error) => {
       // 이미 성공한 항목을 store에서 역순으로 제거하여 중복 등록 방지
       const succeeded = [...succeededIndicesRef.current].sort((a, b) => b - a);
       succeeded.forEach((idx) => removeItem(idx));
       succeededIndicesRef.current = [];
-      showToast('일부 항목 등록에 실패했어요. 전체 등록을 다시 눌러주세요.', 'error');
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : '일부 항목 등록에 실패했어요. 전체 등록을 다시 눌러주세요.';
+      showToast(message, 'error');
     },
   });
 
@@ -194,8 +207,14 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     <View style={containerStyle}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{storeName ?? ''}</Text>
-        <Text style={styles.headerSub}>총 {items.length}개 항목</Text>
+        <Text style={styles.kicker}>FINAL STEP</Text>
+        <Text style={styles.headerTitle}>등록 내역 확인</Text>
+        <View style={styles.headerMeta}>
+          {storeName ? <Text style={styles.headerStore} numberOfLines={1}>{storeName}</Text> : null}
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{items.length}개</Text>
+          </View>
+        </View>
       </View>
 
       {items.length === 0 ? (
@@ -233,24 +252,54 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray100 },
+  container: { flex: 1, backgroundColor: colors.surface },
   header: {
-    backgroundColor: colors.white,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  headerTitle: { ...typography.headingXl },
-  headerSub: { ...typography.bodySm, marginTop: spacing.micro },
+  kicker: {
+    ...typography.tabLabel,
+    fontWeight: '800' as const,
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  headerTitle: {
+    ...typography.headingXl,
+    marginTop: spacing.xs,
+    color: colors.onBackground,
+    letterSpacing: -0.5,
+  },
+  headerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  headerStore: {
+    ...typography.bodySm,
+    color: colors.gray600,
+    flex: 1,
+  },
+  countPill: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: spacing.radiusFull,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  countPillText: {
+    ...typography.caption,
+    fontWeight: '700' as const,
+    color: colors.primary,
+  },
   listContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.lg },
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderRadius: spacing.md,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
+    borderRadius: spacing.radiusLg,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
     padding: spacing.md,
     marginBottom: spacing.cardGap,
     gap: spacing.md,
@@ -283,12 +332,12 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { ...typography.body, color: colors.gray600 },
   footer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.gray200,
+    borderTopWidth: spacing.borderHairline,
+    borderTopColor: colors.outlineVariant,
   },
   submitBtn: {
     backgroundColor: colors.primary,

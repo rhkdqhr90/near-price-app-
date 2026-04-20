@@ -4,6 +4,7 @@ import type {
   VerificationResponse,
   VerificationListResponse,
   MyVerificationsResponse,
+  MyVerificationByPriceResponse,
   PriceTrustScoreResponse,
   UserTrustScoreResponse,
 } from '../types/api.types';
@@ -34,6 +35,14 @@ export const verificationApi = {
     apiClient.get<MyVerificationsResponse>(
       '/prices/my/verifications',
       { params: { page, limit } },
+    ),
+
+  /**
+   * 특정 가격에 대해 내가 남긴 검증 1건 조회
+   */
+  getMyVerificationByPrice: (priceId: string) =>
+    apiClient.get<MyVerificationByPriceResponse | null>(
+      `/prices/${priceId}/verifications/me`,
     ),
 
   /**

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
   FlatList,
+  ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
@@ -40,8 +41,18 @@ import { typography, PJS } from '../../theme/typography';
 
 const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 } as const;
 const MAX_RECENT_SEARCHES = 10;
-const GRID_GAP = spacing.sm;
-const GRID_PADDING = spacing.lg;
+
+/** 인기 품목 TOP 8 — 레퍼런스 `마실 2/screens-misc.jsx` SearchScreen quickTags 기반 정적 목록 */
+const POPULAR_SEARCHES: readonly string[] = [
+  '계란',
+  '두부',
+  '우유',
+  '라면',
+  '사과',
+  '삼겹살',
+  '양파',
+  '쌀',
+];
 
 type Props = HomeScreenProps<'Search'>;
 
@@ -195,9 +206,12 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
   const renderProductCard = useCallback(
     ({ item }: ListRenderItemInfo<SearchPriceCard>) => {
       const imageUri = fixImageUrl(item.imageUrl);
+      const savings = item.maxPrice > 0 && item.maxPrice !== item.minPrice
+        ? Math.round((1 - item.minPrice / item.maxPrice) * 100)
+        : 0;
       return (
         <Pressable
-          style={({ pressed }) => [styles.gridCard, pressed && styles.gridCardPressed]}
+          style={({ pressed }) => [styles.listCard, pressed && styles.listCardPressed]}
           onPress={() => {
             void saveRecentSearch(item.productName);
             navigation.navigate('PriceCompare', {
@@ -208,53 +222,66 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
           accessibilityRole="button"
           accessibilityLabel={`${item.productName} ${formatPrice(item.minPrice)}`}
         >
-          <View style={styles.gridImageWrap}>
+          {/* 썸네일 */}
+          <View style={styles.listThumbWrap}>
             {imageUri ? (
               <Image
                 source={{ uri: imageUri }}
-                style={styles.gridImage}
+                style={styles.listThumb}
                 resizeMode="cover"
-                accessible={true}
                 accessibilityLabel={`${item.productName} 상품 이미지`}
               />
             ) : (
-              <View style={styles.gridImagePlaceholder}>
-                <TagIcon size={26} color={colors.gray400} />
+              <View style={styles.listThumbPlaceholder}>
+                <TagIcon size={22} color={colors.gray400} />
               </View>
             )}
-            <TouchableOpacity
-              style={styles.heartBtn}
-              onPress={() => addWishlist(item.productId)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.productName} 찜하기`}
-            >
-              <HeartIcon size={14} color={colors.white} />
-            </TouchableOpacity>
-            {item.storeCount > 1 && (
-              <View style={styles.storeCountBadge}>
-                <Text style={styles.storeCountBadgeText}>매장 {item.storeCount}곳</Text>
-              </View>
-            )}
-            <View style={styles.priceBadge}>
-              <Text style={styles.priceBadgeText}>{formatPrice(item.minPrice)}</Text>
-            </View>
           </View>
-          <View style={styles.gridInfo}>
-            {item.hasClosingDiscount && (
-              <View style={styles.closingBadge}>
-                <Text style={styles.closingBadgeText}>마감</Text>
-              </View>
-            )}
-            <Text style={styles.gridProductName} numberOfLines={2}>{item.productName}</Text>
+
+          {/* 좌측 정보 */}
+          <View style={styles.listInfo}>
+            <View style={styles.listTitleRow}>
+              <Text style={styles.listProductName} numberOfLines={1}>{item.productName}</Text>
+              {item.hasClosingDiscount && (
+                <View style={styles.closingBadge}>
+                  <Text style={styles.closingBadgeText}>마감할인</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.listMeta} numberOfLines={1}>
+              {item.storeName}
+              {item.storeCount > 1 ? ` · 매장 ${item.storeCount}곳` : ''}
+            </Text>
             <View style={styles.verifiedRow}>
               <CheckIcon size={12} color={colors.midnightMint} />
               <Text style={styles.verifiedText}>인증된 가격</Text>
             </View>
-            <View style={styles.gridStoreRow}>
-              <StoreIcon size={11} color={colors.gray400} />
-              <Text style={styles.gridStoreName} numberOfLines={1}>{item.storeName}</Text>
+          </View>
+
+          {/* 우측 가격 */}
+          <View style={styles.listPriceCol}>
+            <TouchableOpacity
+              style={styles.listHeartBtn}
+              onPress={() => addWishlist(item.productId)}
+              activeOpacity={0.8}
+              hitSlop={HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.productName} 찜하기`}
+            >
+              <HeartIcon size={16} color={colors.gray400} />
+            </TouchableOpacity>
+            <View style={styles.listPriceRow}>
+              <Text style={styles.listPriceValue}>{formatPrice(item.minPrice)}</Text>
+              <Text style={styles.listPriceUnit}>원</Text>
             </View>
+            {savings > 0 && (
+              <Text style={styles.listPriceStrike}>{formatPrice(item.maxPrice)}</Text>
+            )}
+            {savings > 0 && (
+              <View style={styles.savingsPill}>
+                <Text style={styles.savingsPillText}>{item.storeCount}곳 · −{savings}%</Text>
+              </View>
+            )}
           </View>
         </Pressable>
       );
@@ -358,47 +385,68 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
           title="위치가 설정되지 않았어요"
           subtitle="홈 화면에서 동네를 설정한 후 매장을 검색해 주세요."
         />
-      ) : showRecentSearches ? (
-        <View style={styles.recentContainer}>
-          <View style={styles.recentHeader}>
-            <Text style={styles.recentTitle}>최근 검색어</Text>
-            <TouchableOpacity
-              onPress={handleClearAllRecentSearches}
-              hitSlop={HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel="최근 검색어 전체 삭제"
-            >
-              <Text style={styles.clearAllText}>전체 삭제</Text>
-            </TouchableOpacity>
-          </View>
-          {recentSearches.map((query) => (
-            <TouchableOpacity
-              key={query}
-              style={styles.recentItem}
-              onPress={() => handleRecentSearchPress(query)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`최근 검색어 ${query}`}
-            >
-              <SearchIcon size={14} color={colors.gray400} />
-              <Text style={styles.recentItemText}>{query}</Text>
-              <TouchableOpacity
-                onPress={() => handleDeleteRecentSearch(query)}
-                hitSlop={HIT_SLOP}
-                accessibilityRole="button"
-                accessibilityLabel={`${query} 삭제`}
-              >
-                <CloseIcon size={14} color={colors.gray400} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </View>
       ) : showIdle ? (
-        <EmptyState
-          icon={SearchIcon}
-          iconSize={48}
-          title="상품 이름을 입력하세요"
-        />
+        <ScrollView
+          style={styles.idleScroll}
+          contentContainerStyle={styles.idleContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {showRecentSearches && (
+            <>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>최근 검색어</Text>
+                <TouchableOpacity
+                  onPress={handleClearAllRecentSearches}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityLabel="최근 검색어 전체 삭제"
+                >
+                  <Text style={styles.clearAllText}>전체 삭제</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.recentChipRow}>
+                {recentSearches.map((query) => (
+                  <TouchableOpacity
+                    key={query}
+                    style={styles.recentChip}
+                    onPress={() => handleRecentSearchPress(query)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`최근 검색어 ${query}`}
+                  >
+                    <Text style={styles.recentChipText}>{query}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteRecentSearch(query)}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${query} 삭제`}
+                    >
+                      <CloseIcon size={12} color={colors.gray400} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* 인기 품목 TOP 8 — 레퍼런스 `마실 2/screens-misc.jsx` SearchScreen */}
+          <Text style={styles.popularTitle}>인기 품목 TOP 8</Text>
+          <View style={styles.popularGrid}>
+            {POPULAR_SEARCHES.map((tag, i) => (
+              <TouchableOpacity
+                key={tag}
+                style={styles.popularItem}
+                onPress={() => handleRecentSearchPress(tag)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`인기 품목 ${i + 1}위 ${tag}`}
+              >
+                <Text style={styles.popularRank}>{i + 1}</Text>
+                <Text style={styles.popularName} numberOfLines={1}>{tag}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
       ) : isLoading ? (
         <LoadingView message="검색 중..." />
       ) : isError ? (
@@ -417,11 +465,9 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
       ) : activeTab === 'product' ? (
         <FlatList
           data={productCards}
-          numColumns={2}
           keyExtractor={(item) => item.productId}
           renderItem={renderProductCard}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.gridContent}
+          contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={true}
           refreshControl={
@@ -578,8 +624,71 @@ const styles = StyleSheet.create({
     color: colors.gray600,
   },
 
-  // ── 최근 검색어 ──
-  recentContainer: {
+  // ── 최근 검색어 / 인기 품목 (idle 상태) ──
+  idleScroll: {
+    flex: 1,
+  },
+  idleContent: {
+    paddingBottom: spacing.xxl,
+  },
+  recentChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + spacing.micro,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + spacing.micro,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + spacing.micro,
+    borderRadius: spacing.radiusFull,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+  },
+  recentChipText: {
+    ...typography.tagText,
+    fontFamily: PJS.semiBold,
+    color: colors.onBackground,
+  },
+  popularTitle: {
+    ...typography.headingMd,
+    fontFamily: PJS.extraBold,
+    color: colors.onBackground,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  popularGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.xs + spacing.micro,
+  },
+  popularItem: {
+    width: '48.5%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: spacing.radiusMd,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+  },
+  popularRank: {
+    ...typography.body,
+    fontFamily: PJS.extraBold,
+    color: colors.primary,
+  },
+  popularName: {
+    ...typography.body,
+    fontFamily: PJS.bold,
+    color: colors.onBackground,
     flex: 1,
   },
   recentHeader: {
@@ -614,128 +723,132 @@ const styles = StyleSheet.create({
     color: colors.gray700,
   },
 
-  // ── 상품 탭 2열 그리드 ──
-  gridContent: {
-    paddingTop: spacing.sm,
+  // ── 상품 탭 세로형 리스트 카드 (레퍼런스 `마실 2/screens-home.jsx` PriceCard) ──
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
+    gap: spacing.sm + spacing.micro,
   },
-  gridRow: {
-    gap: GRID_GAP,
-    paddingHorizontal: GRID_PADDING,
-    marginBottom: spacing.md,
+  listCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusInput,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    padding: spacing.md,
+    gap: spacing.md,
+    alignItems: 'stretch',
   },
-  gridCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: spacing.radiusLg,
+  listCardPressed: {
+    opacity: 0.95,
+    backgroundColor: colors.surfaceContainerLow,
+  },
+  listThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: spacing.radiusMd,
     overflow: 'hidden',
-    shadowColor: colors.tertiaryContainer,
-    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
-    shadowOpacity: spacing.cardShadowOpacity,
-    shadowRadius: spacing.shadowRadiusXl,
-    elevation: 3,
+    backgroundColor: colors.surfaceContainerLow,
   },
-  gridCardPressed: {
-    opacity: 0.97,
-    transform: [{ scale: 0.99 }],
-  },
-  gridImageWrap: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: colors.secondaryBg,
-  },
-  gridImage: {
+  listThumb: {
     width: '100%',
     height: '100%',
   },
-  gridImagePlaceholder: {
+  listThumbPlaceholder: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heartBtn: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    width: spacing.heartBtnXs,
-    height: spacing.heartBtnXs,
-    borderRadius: spacing.radiusFull,
-    backgroundColor: colors.heartBtnBg,
-    alignItems: 'center',
+  listInfo: {
+    flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
+    gap: spacing.micro + spacing.micro,
   },
-  storeCountBadge: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    left: spacing.sm,
-    backgroundColor: colors.distanceBadgeBg,
-    borderRadius: spacing.radiusFull,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+  listTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + spacing.micro,
+    flexWrap: 'wrap',
   },
-  storeCountBadgeText: {
-    ...typography.tabLabel,
-    fontFamily: PJS.semiBold,
-    color: colors.white,
-  },
-  gridInfo: {
-    padding: spacing.md,
+  listProductName: {
+    ...typography.body,
+    fontFamily: PJS.bold,
+    color: colors.onBackground,
+    letterSpacing: -0.2,
+    flexShrink: 1,
   },
   closingBadge: {
     backgroundColor: colors.dangerLight,
-    borderRadius: spacing.radiusSm,
-    paddingHorizontal: spacing.sm,
+    borderRadius: spacing.radiusSm - 2,
+    paddingHorizontal: spacing.xs + spacing.micro,
     paddingVertical: spacing.micro,
-    alignSelf: 'flex-start',
-    marginBottom: spacing.xs,
   },
   closingBadgeText: {
     ...typography.tabLabel,
-    fontFamily: PJS.bold,
+    fontFamily: PJS.extraBold,
     color: colors.danger,
   },
-  gridProductName: {
-    ...typography.tagText,
-    fontFamily: PJS.bold,
-    color: colors.black,
-    lineHeight: spacing.lineHeightSm,
-    marginBottom: spacing.xs,
-  },
-  priceBadge: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.priceBadgeBg,
-    borderRadius: spacing.radiusFull,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  priceBadgeText: {
-    ...typography.tagText,
-    fontFamily: PJS.extraBold,
-    color: colors.primary,
+  listMeta: {
+    ...typography.bodySm,
+    color: colors.gray600,
   },
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginTop: spacing.micro,
   },
   verifiedText: {
     ...typography.tabLabel,
     fontFamily: PJS.semiBold,
     color: colors.midnightMint,
   },
-  gridStoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  listPriceCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    minWidth: 92,
+    gap: spacing.micro,
   },
-  gridStoreName: {
+  listHeartBtn: {
+    padding: spacing.micro,
+    marginBottom: spacing.xs,
+  },
+  listPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 1,
+  },
+  listPriceValue: {
+    ...typography.headingXl,
+    fontFamily: PJS.extraBold,
+    color: colors.onBackground,
+    letterSpacing: -0.6,
+    lineHeight: spacing.radiusXl,
+  },
+  listPriceUnit: {
+    ...typography.bodySm,
+    fontFamily: PJS.bold,
+    color: colors.onBackground,
+  },
+  listPriceStrike: {
     ...typography.caption,
-    fontFamily: PJS.medium,
-    color: colors.gray600,
-    flex: 1,
+    color: colors.gray400,
+    textDecorationLine: 'line-through',
+    marginTop: spacing.micro,
+  },
+  savingsPill: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xs + spacing.micro,
+    paddingVertical: spacing.micro,
+    borderRadius: spacing.radiusSm,
+    backgroundColor: colors.primaryLight,
+  },
+  savingsPillText: {
+    ...typography.tabLabel,
+    fontFamily: PJS.extraBold,
+    color: colors.primary,
   },
 });
 

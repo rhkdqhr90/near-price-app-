@@ -603,9 +603,9 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         )}
 
-        {/* 4. 나의 활동 섹션 */}
+        {/* 4. 내 활동 섹션 — 레퍼런스 `마실 2/screens-misc.jsx` MyPageScreen 섹션 그루핑 */}
         <View style={styles.sectionOuter}>
-          <Text style={styles.sectionLabel}>나의 활동</Text>
+          <Text style={styles.sectionKicker}>내 활동</Text>
           <View style={styles.sectionCard}>
             <MenuItem
               icon={<TagIcon size={20} color={colors.primary} />}
@@ -616,7 +616,15 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
               icon={<CheckIcon size={20} color={colors.primary} />}
               label="내가 인정한 가격"
               onPress={handleNavigateLikedPrices}
+              isLast
             />
+          </View>
+        </View>
+
+        {/* 5. 설정 섹션 */}
+        <View style={styles.sectionOuter}>
+          <Text style={styles.sectionKicker}>설정</Text>
+          <View style={styles.sectionCard}>
             <MenuItem
               icon={<MapPinIcon size={20} color={colors.primary} />}
               label="내 동네 설정"
@@ -627,7 +635,15 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
               icon={<BellIcon size={20} color={colors.primary} />}
               label="알림 설정"
               onPress={handleNotificationSettings}
+              isLast
             />
+          </View>
+        </View>
+
+        {/* 6. 고객지원 섹션 */}
+        <View style={styles.sectionOuter}>
+          <Text style={styles.sectionKicker}>고객지원</Text>
+          <View style={styles.sectionCard}>
             <MenuItem
               icon={<DocumentIcon size={20} color={colors.primary} />}
               label="공지사항"
@@ -647,7 +663,15 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
               icon={<DocumentIcon size={20} color={colors.primary} />}
               label="개인정보처리방침"
               onPress={handleNavigatePrivacyPolicy}
+              isLast
             />
+          </View>
+        </View>
+
+        {/* 7. 계정 섹션 */}
+        <View style={styles.sectionOuter}>
+          <Text style={styles.sectionKicker}>계정</Text>
+          <View style={styles.sectionCard}>
             <MenuItem
               icon={<LogOutIcon size={20} color={colors.primary} />}
               label="로그아웃"
@@ -813,6 +837,14 @@ const styles = StyleSheet.create({
     ...typography.headingMd,
     color: colors.black,
     marginBottom: spacing.sm,
+  },
+  sectionKicker: {
+    ...typography.caption,
+    fontWeight: '700' as const,
+    color: colors.gray600,
+    letterSpacing: 0.5,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   sectionCard: {
     backgroundColor: colors.white,

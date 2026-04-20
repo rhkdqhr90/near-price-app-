@@ -5,15 +5,16 @@ export const colors = {
   primaryContainer: '#26A69A', // 중간 틸
   onPrimary: '#ffffff',        // On Primary
 
-  secondaryBg: '#f5f3ee',      // surface-container-low
+  secondaryBg: '#F1F5EE',      // surface-container-low (레퍼런스 `마실 2/theme.js` fresh.surfaceAlt)
 
   // Surface 계층 (No-Line Rule 구현 — 테두리 대신 배경색 계층으로 구분)
-  surface: '#fbf9f4',
+  // 레퍼런스 `마실 2/theme.js` fresh variant 기준으로 재정렬 — 웜 옐로우 → 쿨 뉴트럴 그레이
+  surface: '#FAFBF8',
   surfaceContainerLowest: '#ffffff',
-  surfaceContainerLow: '#f5f3ee',
-  surfaceContainer: '#f0eee9',
-  surfaceContainerHigh: '#eae8e3',
-  surfaceContainerHighest: '#e4e2dd',
+  surfaceContainerLow: '#F1F5EE',
+  surfaceContainer: '#EAEFE8',
+  surfaceContainerHigh: '#E4EBE7',
+  surfaceContainerHighest: '#DCE4DE',
   onBackground: '#1b1c19',
 
   // Accent: mustard yellow
@@ -47,7 +48,7 @@ export const colors = {
   white: '#FFFFFF',
 
   cardBg: '#FFFFFF',
-  surfaceBg: '#fbf9f4',
+  surfaceBg: '#FAFBF8',
 
   success: '#4CAF50',
   successLight: '#E8F5E9',
@@ -159,6 +160,19 @@ export const colors = {
   flyerProductDark: '#1a1a1a',
   starYellow: '#F59E0B',
 } as const;
+
+// ─── StoreType 카테고리 컬러 (StoreSelectScreen) ─────────────────────────
+// 레퍼런스 `마실 2/screens-register.jsx` catBadge 규칙 기반.
+// 매장 리스트 카드 좌측 뱃지와 지도 핀 색상을 동일하게 사용.
+export const storeCategoryColors = {
+  convenience:       { bg: '#E8F1FF', fg: '#1E6BD1' }, // 편의점 — 파랑
+  traditional_market:{ bg: '#FFF0DB', fg: '#B55A00' }, // 시장 — 주황
+  supermarket:       { bg: '#E8F7EC', fg: '#1B7A3A' }, // 슈퍼 — 초록
+  large_mart:        { bg: '#FFF8E1', fg: '#B8860B' }, // 대형마트 — 머스터드
+  mart:              { bg: '#E0F7F3', fg: '#00857A' }, // 일반 마트 — primary
+} as const;
+
+export type StoreCategoryKey = keyof typeof storeCategoryColors;
 
 // ─── 가격표(PriceTag) 그라디언트 토큰 ─────────────────────────────────────
 // LinearGradient start/end 쌍. 135deg 방향 권장.

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { colors, spacing } from '../../theme';
 import { PJS, typography } from '../../theme/typography';
-import { formatPrice, formatRelativeTime } from '../../utils/format';
+import { fixImageUrl, formatPrice, formatRelativeTime } from '../../utils/format';
 import type { ProductPriceCard } from '../../types/api.types';
 import { PriceTag } from './PriceTag';
 
@@ -37,6 +37,7 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
   const storeName = item.cheapestStore?.name ?? '매장';
   const registrantName = item.registrant?.nickname ?? '익명';
   const relativeTime = formatRelativeTime(item.createdAt);
+  const imageUri = fixImageUrl(item.imageUrl);
 
   // 진행바: minPrice → maxPrice 사이 비율 (최저가는 0, 최고가는 1)
   // 홈에서 최저가 카드만 보이므로 현재가는 항상 minPrice (= 0% 위치).
@@ -57,8 +58,8 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
       accessibilityLabel={`${item.productName} ${formatPrice(item.minPrice)}원`}
     >
       <View style={styles.row}>
-        {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.image} />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.image} />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>

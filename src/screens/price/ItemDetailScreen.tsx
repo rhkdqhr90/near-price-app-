@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, Switch, Image, LayoutAnimation,
+  StyleSheet, Alert, Image, LayoutAnimation,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ import { usePriceRegisterStore } from '../../store/priceRegisterStore';
 import { useSearchProducts } from '../../hooks/queries/useProducts';
 import { colors, priceTagGradients } from '../../theme';
 import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
+import { typography, PJS } from '../../theme/typography';
 import CameraIcon from '../../components/icons/CameraIcon';
 import ChevronDownIcon from '../../components/icons/ChevronDownIcon';
 import ChevronUpIcon from '../../components/icons/ChevronUpIcon';
@@ -48,13 +48,14 @@ const CARD_DISCOUNT_OPTIONS: { label: string; value: CardDiscountType }[] = [
   { label: '% 할인', value: 'percent' },
 ];
 
+// 레퍼런스 `마실 2/screens-register.jsx` 단위 라벨: kg / g / 개 / 구 / 팩 / 근 / 직접입력
 const UNIT_OPTIONS: { label: string; value: UnitType }[] = [
   { label: 'kg', value: 'kg' },
   { label: 'g', value: 'g' },
   { label: '개', value: 'count' },
-  { label: '봉', value: 'bag' },
+  { label: '구', value: 'bunch' },
   { label: '팩', value: 'pack' },
-  { label: '묶음', value: 'bunch' },
+  { label: '봉', value: 'bag' },
   { label: '기타', value: 'other' },
 ];
 
@@ -64,12 +65,10 @@ const QUALITY_OPTIONS = [
   { label: '하', value: 'LOW' as const },
 ];
 
-/** 인라인 검증 에러 상태 */
 interface FormErrors {
   productName?: string;
   price?: string;
   eventDate?: string;
-  // 가격표 타입별 필수 필드 에러
   originalPrice?: string;
   bundleType?: string;
   flatGroupName?: string;
@@ -80,7 +79,6 @@ interface FormErrors {
   cardDiscountValue?: string;
 }
 
-/** YYYY-MM-DD 포맷 파서 */
 const parseDateString = (s: string): Date | null => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const d = new Date(s + 'T00:00:00');
@@ -162,22 +160,22 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const [cardConditionNote, setCardConditionNote] = useState(initialCardConditionNote ?? '');
   const [showEndsAtPicker, setShowEndsAtPicker] = useState(false);
 
-  // 인라인 에러 상태
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // DatePicker 상태
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  const [expandOptionalFields, setExpandOptionalFields] = useState(false);
+  // 레퍼런스 RegisterItemForm 에는 노출되지 않는 고급 옵션 — 접이식 처리
+  const [expandPriceTag, setExpandPriceTag] = useState(
+    (initialPriceTagType ?? 'normal') !== 'normal',
+  );
+  const [expandMemo, setExpandMemo] = useState(!!(initialMemo && initialMemo.length));
 
-  // blurTimerRef는 ref이므로 dependency에 포함 불필요 — cleanup 전용
   useEffect(() => () => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
   }, []);
 
   const { data: suggestions } = useSearchProducts(productName.trim());
 
-  // 필드 변경 시 해당 에러 클리어
   const handleProductNameChange = useCallback((v: string) => {
     setProductName(v);
     setProductId(undefined);
@@ -201,7 +199,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     setErrors((prev) => ({ ...prev, eventDate: undefined }));
   }, []);
 
-  // DatePicker 핸들러
   const handleStartDateChange = useCallback((_: DateTimePickerEvent, date?: Date) => {
     setShowStartPicker(Platform.OS === 'ios');
     if (date) {
@@ -257,7 +254,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       hasError = true;
     }
 
-    // ── 가격표 타입별 필수 필드 검증 ──
     const originalPriceNum = parseInt(originalPrice, 10);
     const memberPriceNum = parseInt(memberPrice, 10);
     const cardDiscountValueNum = parseInt(cardDiscountValue, 10);
@@ -320,7 +316,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       memo: memo.trim() || undefined,
       eventStart: hasEvent ? eventStart : undefined,
       eventEnd: hasEvent ? eventEnd : undefined,
-      // ── 가격표 필드 ──
       priceTagType,
       originalPrice:
         priceTagType === 'sale' || priceTagType === 'closing' || priceTagType === 'cardPayment'
@@ -364,10 +359,16 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   ]);
 
   const totalItems = items.length;
+  const fromOcr =
+    editIndex === undefined &&
+    !!paramImageUri &&
+    ((initialName?.length ?? 0) > 0 || (initialPrice?.length ?? 0) > 0);
   const containerStyle = useMemo(
     () => [styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }],
     [insets.bottom],
   );
+
+  const submitDisabled = !productName.trim() || !price;
 
   return (
     <KeyboardAvoidingView
@@ -381,15 +382,24 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        {/* 매장명 표시 */}
-        <View style={styles.storeRow}>
-          <Text style={styles.storeLabel}>매장</Text>
-          <Text style={styles.storeNameText} numberOfLines={1}>{storeName ?? ''}</Text>
-        </View>
+        {/* STEP 3 / 3 · 매장명 */}
+        <Text style={styles.kickerText} numberOfLines={1}>
+          STEP 3 / 3{storeName ? ` · ${storeName}` : ''}
+        </Text>
+
+        {/* OCR 성공 배너 */}
+        {fromOcr && (
+          <View style={styles.ocrBanner}>
+            <Text style={styles.ocrBannerIcon}>✨</Text>
+            <Text style={styles.ocrBannerText}>AI가 가격표에서 정보를 인식했어요</Text>
+          </View>
+        )}
 
         {/* 상품명 */}
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>상품명 *</Text>
+          <Text style={styles.fieldLabel}>
+            상품명 <Text style={styles.required}>*</Text>
+          </Text>
           <TextInput
             style={[styles.input, errors.productName ? styles.inputError : undefined]}
             value={productName}
@@ -399,7 +409,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
             placeholder="예: 양파, 계란, 삼겹살"
             placeholderTextColor={colors.gray400}
             accessibilityLabel="상품명"
-            accessibilityHint="상품 이름을 입력하세요"
           />
           {errors.productName ? (
             <Text style={styles.errorText}>{errors.productName}</Text>
@@ -430,19 +439,20 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </View>
 
-        {/* 가격 */}
+        {/* 가격 — 레퍼런스 inputWrap: 오른쪽정렬 큰 숫자 + 원 suffix */}
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>가격 *</Text>
-          <View style={styles.priceRow}>
+          <Text style={styles.fieldLabel}>
+            가격 <Text style={styles.required}>*</Text>
+          </Text>
+          <View style={[styles.priceWrap, errors.price ? styles.inputError : undefined]}>
             <TextInput
-              style={[styles.input, styles.priceInput, errors.price ? styles.inputError : undefined]}
+              style={styles.priceInput}
               value={price}
               onChangeText={handlePriceChange}
               placeholder="0"
               placeholderTextColor={colors.gray400}
               keyboardType="numeric"
               accessibilityLabel="가격"
-              accessibilityHint="가격을 숫자로 입력하세요"
             />
             <Text style={styles.priceSuffix}>원</Text>
           </View>
@@ -451,318 +461,60 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           ) : null}
         </View>
 
-        {/* ── 가격표(PriceTag) 타입 선택 ── */}
+        {/* 단위 · 수량 */}
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>가격표 타입</Text>
+          <Text style={styles.fieldLabel}>단위 · 수량</Text>
           <View style={styles.chipRow}>
-            {PRICE_TAG_OPTIONS.map((opt) => {
-              const active = priceTagType === opt.value;
-              const gradient = priceTagGradients[opt.value];
+            {UNIT_OPTIONS.map(opt => {
+              const active = selectedUnit === opt.value;
               return (
                 <TouchableOpacity
                   key={opt.value}
-                  style={[
-                    styles.chip,
-                    active && { backgroundColor: gradient[0], borderColor: gradient[1] },
-                  ]}
-                  onPress={() => {
-                    // 타입 전환 시 이전 타입 전용 필드 초기화 (동일 세션 내 의도치 않은 값 복원 방지)
-                    setPriceTagType(opt.value);
-                    if (opt.value !== 'sale' && opt.value !== 'closing' && opt.value !== 'cardPayment') {
-                      setOriginalPrice('');
-                    }
-                    if (opt.value !== 'bundle') {
-                      setBundleType(undefined);
-                      setBundleQty(undefined);
-                    }
-                    if (opt.value !== 'flat') setFlatGroupName('');
-                    if (opt.value !== 'member') setMemberPrice('');
-                    if (opt.value !== 'closing') setEndsAt('');
-                    if (opt.value !== 'cardPayment') {
-                      setCardLabel('');
-                      setCardDiscountType(undefined);
-                      setCardDiscountValue('');
-                      setCardConditionNote('');
-                    }
-                  }}
+                  style={[styles.chip, active && styles.chipInkActive]}
+                  onPress={() => setSelectedUnit(active ? undefined : opt.value)}
                   accessibilityRole="button"
-                  accessibilityLabel={`가격표 ${opt.label}`}
+                  accessibilityLabel={`단위 ${opt.label}`}
                   accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  <Text style={[styles.chipText, active && styles.chipTextInkActive]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-
-          {/* sale / closing / cardPayment → 원가 */}
-          {(priceTagType === 'sale' ||
-            priceTagType === 'closing' ||
-            priceTagType === 'cardPayment') && (
-            <View style={styles.priceTagSubField}>
-              <Text style={styles.fieldLabel}>원가 *</Text>
-              <View style={styles.priceRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.priceInput,
-                    errors.originalPrice ? styles.inputError : undefined,
-                  ]}
-                  value={originalPrice}
-                  onChangeText={(v) => {
-                    setOriginalPrice(v.replace(/[^0-9]/g, ''));
-                    setErrors((e) => ({ ...e, originalPrice: undefined }));
-                  }}
-                  placeholder="0"
-                  placeholderTextColor={colors.gray400}
-                  keyboardType="numeric"
-                  accessibilityLabel="원가"
-                />
-                <Text style={styles.priceSuffix}>원</Text>
-              </View>
-              {errors.originalPrice ? (
-                <Text style={styles.errorText}>{errors.originalPrice}</Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* bundle → bundleType */}
-          {priceTagType === 'bundle' && (
-            <View style={styles.priceTagSubField}>
-              <Text style={styles.fieldLabel}>묶음 타입 *</Text>
-              <View style={styles.chipRow}>
-                {BUNDLE_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[styles.chip, bundleType === opt.value && styles.chipActive]}
-                    onPress={() => {
-                      setBundleType(opt.value);
-                      setBundleQty(opt.qty);
-                      setErrors((e) => ({ ...e, bundleType: undefined }));
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`묶음 ${opt.label}`}
-                    accessibilityState={{ selected: bundleType === opt.value }}
-                  >
-                    <Text
-                      style={[styles.chipText, bundleType === opt.value && styles.chipTextActive]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {errors.bundleType ? (
-                <Text style={styles.errorText}>{errors.bundleType}</Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* flat → flatGroupName */}
-          {priceTagType === 'flat' && (
-            <View style={styles.priceTagSubField}>
-              <Text style={styles.fieldLabel}>균일가 그룹명 *</Text>
-              <TextInput
-                style={[styles.input, errors.flatGroupName ? styles.inputError : undefined]}
-                value={flatGroupName}
-                onChangeText={(v) => {
-                  setFlatGroupName(v);
-                  if (v.trim()) setErrors((e) => ({ ...e, flatGroupName: undefined }));
-                }}
-                placeholder="예: 5000원 균일"
-                placeholderTextColor={colors.gray400}
-                maxLength={50}
-                accessibilityLabel="균일가 그룹명"
-              />
-              {errors.flatGroupName ? (
-                <Text style={styles.errorText}>{errors.flatGroupName}</Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* member → memberPrice */}
-          {priceTagType === 'member' && (
-            <View style={styles.priceTagSubField}>
-              <Text style={styles.fieldLabel}>비회원가 *</Text>
-              <View style={styles.priceRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.priceInput,
-                    errors.memberPrice ? styles.inputError : undefined,
-                  ]}
-                  value={memberPrice}
-                  onChangeText={(v) => {
-                    setMemberPrice(v.replace(/[^0-9]/g, ''));
-                    setErrors((e) => ({ ...e, memberPrice: undefined }));
-                  }}
-                  placeholder="0"
-                  placeholderTextColor={colors.gray400}
-                  keyboardType="numeric"
-                  accessibilityLabel="비회원가"
-                />
-                <Text style={styles.priceSuffix}>원</Text>
-              </View>
-              {errors.memberPrice ? (
-                <Text style={styles.errorText}>{errors.memberPrice}</Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* closing → endsAt */}
-          {priceTagType === 'closing' && (
-            <View style={styles.priceTagSubField}>
-              <Text style={styles.fieldLabel}>마감 시각 *</Text>
-              <TouchableOpacity
-                style={[
-                  styles.datePickerBtn,
-                  errors.endsAt ? styles.inputError : undefined,
-                ]}
-                onPress={() => setShowEndsAtPicker(true)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={endsAt ? `마감 ${endsAt}` : '마감 시각 선택'}
-              >
-                <Text style={[styles.datePickerText, !endsAt && styles.datePickerPlaceholder]}>
-                  {endsAt
-                    ? new Date(endsAt).toLocaleString('ko-KR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : '마감 시각 선택'}
-                </Text>
-              </TouchableOpacity>
-              {errors.endsAt ? <Text style={styles.errorText}>{errors.endsAt}</Text> : null}
-              {showEndsAtPicker && (
-                <DateTimePicker
-                  value={endsAt ? new Date(endsAt) : new Date()}
-                  mode="datetime"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={(_: DateTimePickerEvent, date?: Date) => {
-                    setShowEndsAtPicker(Platform.OS === 'ios');
-                    if (date) {
-                      setEndsAt(date.toISOString());
-                      setErrors((e) => ({ ...e, endsAt: undefined }));
-                    }
-                  }}
-                  locale="ko"
-                  minimumDate={new Date()}
-                />
-              )}
-            </View>
-          )}
-
-          {/* cardPayment → cardLabel + type + value + note */}
-          {priceTagType === 'cardPayment' && (
-            <>
-              <View style={styles.priceTagSubField}>
-                <Text style={styles.fieldLabel}>카드명 *</Text>
-                <TextInput
-                  style={[styles.input, errors.cardLabel ? styles.inputError : undefined]}
-                  value={cardLabel}
-                  onChangeText={(v) => {
-                    setCardLabel(v);
-                    if (v.trim()) setErrors((e) => ({ ...e, cardLabel: undefined }));
-                  }}
-                  placeholder="예: 신한카드, 현대 M포인트"
-                  placeholderTextColor={colors.gray400}
-                  maxLength={50}
-                  accessibilityLabel="카드명"
-                />
-                {errors.cardLabel ? (
-                  <Text style={styles.errorText}>{errors.cardLabel}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.priceTagSubField}>
-                <Text style={styles.fieldLabel}>할인 방식 *</Text>
-                <View style={styles.chipRow}>
-                  {CARD_DISCOUNT_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[styles.chip, cardDiscountType === opt.value && styles.chipActive]}
-                      onPress={() => {
-                        setCardDiscountType(opt.value);
-                        setErrors((e) => ({ ...e, cardDiscountType: undefined }));
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={opt.label}
-                      accessibilityState={{ selected: cardDiscountType === opt.value }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          cardDiscountType === opt.value && styles.chipTextActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {errors.cardDiscountType ? (
-                  <Text style={styles.errorText}>{errors.cardDiscountType}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.priceTagSubField}>
-                <Text style={styles.fieldLabel}>
-                  할인 값 * {cardDiscountType === 'percent' ? '(%)' : '(원)'}
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    errors.cardDiscountValue ? styles.inputError : undefined,
-                  ]}
-                  value={cardDiscountValue}
-                  onChangeText={(v) => {
-                    setCardDiscountValue(v.replace(/[^0-9]/g, ''));
-                    setErrors((e) => ({ ...e, cardDiscountValue: undefined }));
-                  }}
-                  placeholder="0"
-                  placeholderTextColor={colors.gray400}
-                  keyboardType="numeric"
-                  accessibilityLabel="할인 값"
-                />
-                {errors.cardDiscountValue ? (
-                  <Text style={styles.errorText}>{errors.cardDiscountValue}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.priceTagSubField}>
-                <Text style={styles.fieldLabel}>조건 메모 (선택)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={cardConditionNote}
-                  onChangeText={setCardConditionNote}
-                  placeholder="예: 3만원 이상 결제 시"
-                  placeholderTextColor={colors.gray400}
-                  maxLength={100}
-                  accessibilityLabel="조건 메모"
-                />
-              </View>
-            </>
+          {selectedUnit && (
+            <TextInput
+              style={[styles.input, styles.quantityInput]}
+              value={quantity}
+              onChangeText={setQuantity}
+              placeholder="수량 (예: 1, 30, 600)"
+              placeholderTextColor={colors.gray400}
+              keyboardType="numeric"
+              accessibilityLabel="수량"
+            />
           )}
         </View>
 
-        {/* 이벤트/할인 */}
+        {/* 할인 중인가요? — 레퍼런스 커스텀 pill 토글 */}
         <View style={styles.field}>
+          <Text style={styles.fieldLabel}>할인 중인가요?</Text>
           <View style={styles.toggleRow}>
-            <Text style={styles.fieldLabel}>이벤트/할인 여부</Text>
-            <Switch
-              value={hasEvent}
-              onValueChange={setHasEvent}
-              trackColor={{ false: colors.gray200, true: colors.primary }}
-              thumbColor={colors.white}
+            <TouchableOpacity
+              style={[styles.toggleTrack, hasEvent && styles.toggleTrackOn]}
+              onPress={() => setHasEvent(!hasEvent)}
+              activeOpacity={0.8}
               accessibilityRole="switch"
-              accessibilityLabel="이벤트/할인 여부"
               accessibilityState={{ checked: hasEvent }}
-            />
+              accessibilityLabel="할인 중인가요?"
+            >
+              <View style={[styles.toggleThumb, hasEvent && styles.toggleThumbOn]} />
+            </TouchableOpacity>
+            <Text style={styles.toggleHelper}>
+              {hasEvent ? '기간/할인율 상세 설정 가능' : '정가'}
+            </Text>
           </View>
+
           {hasEvent && (
             <View style={styles.dateSection}>
               <View style={styles.dateRow}>
@@ -796,7 +548,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
               <TouchableOpacity style={styles.todayBtn} onPress={handleTodayOnly} accessibilityRole="button" accessibilityLabel="오늘만 설정">
                 <Text style={styles.todayBtnText}>오늘만</Text>
               </TouchableOpacity>
-
               {showStartPicker && (
                 <DateTimePicker
                   value={parseDateString(eventStart) ?? new Date()}
@@ -820,7 +571,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </View>
 
-        {/* 사진 */}
+        {/* 사진 — 레퍼런스 100x100 */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>사진</Text>
           {imageUri ? (
@@ -830,124 +581,374 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.photoPlaceholder} onPress={handlePickImage} accessibilityRole="button" accessibilityLabel="사진 추가">
-              <CameraIcon size={28} color={colors.gray400} />
+              <CameraIcon size={22} color={colors.gray600} />
               <Text style={styles.photoPlaceholderText}>사진 추가</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* 추가 정보 (선택) - 접이식 */}
+        {/* 품질 (선택) — 레퍼런스 3칩 full-width */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>품질 (선택)</Text>
+          <View style={styles.qualityRow}>
+            {QUALITY_OPTIONS.map(opt => {
+              const active = quality === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.qualityChip, active && styles.qualityChipActive]}
+                  onPress={() => setQuality(active ? undefined : opt.value)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`품질 ${opt.label}`}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.qualityChipText, active && styles.qualityChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* 세부 가격표 타입 — 접이식 고급 옵션 */}
         <View style={styles.field}>
           <TouchableOpacity
             style={styles.collapsibleHeader}
             onPress={() => {
               LayoutAnimation.configureNext(
-                LayoutAnimation.create(
-                  200,
-                  LayoutAnimation.Types.easeInEaseOut,
-                  LayoutAnimation.Properties.opacity
-                )
+                LayoutAnimation.create(200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity),
               );
-              setExpandOptionalFields(!expandOptionalFields);
+              setExpandPriceTag(!expandPriceTag);
             }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="추가 정보"
-            accessibilityState={{ expanded: expandOptionalFields }}
+            accessibilityState={{ expanded: expandPriceTag }}
           >
-            <Text style={styles.collapsibleTitle}>추가 정보 (선택)</Text>
-            {expandOptionalFields ? (
-              <ChevronUpIcon size={20} color={colors.gray600} />
+            <Text style={styles.collapsibleTitle}>세부 가격표 타입 (선택)</Text>
+            {expandPriceTag ? (
+              <ChevronUpIcon size={18} color={colors.gray600} />
             ) : (
-              <ChevronDownIcon size={20} color={colors.gray600} />
+              <ChevronDownIcon size={18} color={colors.gray600} />
             )}
           </TouchableOpacity>
 
-          {expandOptionalFields && (
-            <View>
-              {/* 단위 */}
-              <View style={styles.optionalFieldGroup}>
-                <Text style={styles.fieldLabel}>단위</Text>
-                <View style={styles.chipRow}>
-                  {UNIT_OPTIONS.map(opt => (
+          {expandPriceTag && (
+            <View style={styles.collapsibleBody}>
+              <View style={styles.chipRow}>
+                {PRICE_TAG_OPTIONS.map((opt) => {
+                  const active = priceTagType === opt.value;
+                  const gradient = priceTagGradients[opt.value];
+                  return (
                     <TouchableOpacity
                       key={opt.value}
-                      style={[styles.chip, selectedUnit === opt.value && styles.chipActive]}
-                      onPress={() => setSelectedUnit(selectedUnit === opt.value ? undefined : opt.value)}
+                      style={[
+                        styles.chip,
+                        active && { backgroundColor: gradient[0], borderColor: gradient[1] },
+                      ]}
+                      onPress={() => {
+                        setPriceTagType(opt.value);
+                        if (opt.value !== 'sale' && opt.value !== 'closing' && opt.value !== 'cardPayment') {
+                          setOriginalPrice('');
+                        }
+                        if (opt.value !== 'bundle') {
+                          setBundleType(undefined);
+                          setBundleQty(undefined);
+                        }
+                        if (opt.value !== 'flat') setFlatGroupName('');
+                        if (opt.value !== 'member') setMemberPrice('');
+                        if (opt.value !== 'closing') setEndsAt('');
+                        if (opt.value !== 'cardPayment') {
+                          setCardLabel('');
+                          setCardDiscountType(undefined);
+                          setCardDiscountValue('');
+                          setCardConditionNote('');
+                        }
+                      }}
                       accessibilityRole="button"
-                      accessibilityLabel={`단위 ${opt.label}`}
-                      accessibilityState={{ selected: selectedUnit === opt.value }}
+                      accessibilityLabel={`가격표 ${opt.label}`}
+                      accessibilityState={{ selected: active }}
                     >
-                      <Text style={[styles.chipText, selectedUnit === opt.value && styles.chipTextActive]}>
+                      <Text style={[styles.chipText, active && styles.chipTextWhiteActive]}>
                         {opt.label}
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                  );
+                })}
+              </View>
+
+              {(priceTagType === 'sale' || priceTagType === 'closing' || priceTagType === 'cardPayment') && (
+                <View style={styles.priceTagSubField}>
+                  <Text style={styles.fieldLabel}>
+                    원가 <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.priceWrap, errors.originalPrice ? styles.inputError : undefined]}>
+                    <TextInput
+                      style={styles.priceInput}
+                      value={originalPrice}
+                      onChangeText={(v) => {
+                        setOriginalPrice(v.replace(/[^0-9]/g, ''));
+                        setErrors((e) => ({ ...e, originalPrice: undefined }));
+                      }}
+                      placeholder="0"
+                      placeholderTextColor={colors.gray400}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.priceSuffix}>원</Text>
+                  </View>
+                  {errors.originalPrice ? <Text style={styles.errorText}>{errors.originalPrice}</Text> : null}
                 </View>
-                {selectedUnit && (
+              )}
+
+              {priceTagType === 'bundle' && (
+                <View style={styles.priceTagSubField}>
+                  <Text style={styles.fieldLabel}>
+                    묶음 타입 <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={styles.chipRow}>
+                    {BUNDLE_OPTIONS.map((opt) => {
+                      const active = bundleType === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[styles.chip, active && styles.chipInkActive]}
+                          onPress={() => {
+                            setBundleType(opt.value);
+                            setBundleQty(opt.qty);
+                            setErrors((e) => ({ ...e, bundleType: undefined }));
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                        >
+                          <Text style={[styles.chipText, active && styles.chipTextInkActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {errors.bundleType ? <Text style={styles.errorText}>{errors.bundleType}</Text> : null}
+                </View>
+              )}
+
+              {priceTagType === 'flat' && (
+                <View style={styles.priceTagSubField}>
+                  <Text style={styles.fieldLabel}>
+                    균일가 그룹명 <Text style={styles.required}>*</Text>
+                  </Text>
                   <TextInput
-                    style={[styles.input, styles.quantityInput]}
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    placeholder="수량 (예: 1, 30, 600)"
+                    style={[styles.input, errors.flatGroupName ? styles.inputError : undefined]}
+                    value={flatGroupName}
+                    onChangeText={(v) => {
+                      setFlatGroupName(v);
+                      if (v.trim()) setErrors((e) => ({ ...e, flatGroupName: undefined }));
+                    }}
+                    placeholder="예: 5000원 균일"
                     placeholderTextColor={colors.gray400}
-                    keyboardType="numeric"
-                    accessibilityLabel="수량"
-                    accessibilityHint="수량을 숫자로 입력하세요"
+                    maxLength={50}
                   />
-                )}
-              </View>
-
-              {/* 품질 */}
-              <View style={styles.optionalFieldGroup}>
-                <Text style={styles.fieldLabel}>품질</Text>
-                <View style={styles.chipRow}>
-                  {QUALITY_OPTIONS.map(opt => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[styles.chip, quality === opt.value && styles.chipActive]}
-                      onPress={() => setQuality(quality === opt.value ? undefined : opt.value)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`품질 ${opt.label}`}
-                      accessibilityState={{ selected: quality === opt.value }}
-                    >
-                      <Text style={[styles.chipText, quality === opt.value && styles.chipTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {errors.flatGroupName ? <Text style={styles.errorText}>{errors.flatGroupName}</Text> : null}
                 </View>
-              </View>
+              )}
 
-              {/* 메모 */}
-              <View style={styles.optionalFieldGroup}>
-                <Text style={styles.fieldLabel}>메모</Text>
-                <TextInput
-                  style={[styles.input, styles.memoInput]}
-                  value={memo}
-                  onChangeText={setMemo}
-                  placeholder="참고할 내용이 있다면 (최대 200자)"
-                  placeholderTextColor={colors.gray400}
-                  multiline
-                  maxLength={200}
-                  textAlignVertical="top"
-                  accessibilityLabel="메모"
-                  accessibilityHint="참고할 내용을 입력하세요"
-                />
-              </View>
+              {priceTagType === 'member' && (
+                <View style={styles.priceTagSubField}>
+                  <Text style={styles.fieldLabel}>
+                    비회원가 <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.priceWrap, errors.memberPrice ? styles.inputError : undefined]}>
+                    <TextInput
+                      style={styles.priceInput}
+                      value={memberPrice}
+                      onChangeText={(v) => {
+                        setMemberPrice(v.replace(/[^0-9]/g, ''));
+                        setErrors((e) => ({ ...e, memberPrice: undefined }));
+                      }}
+                      placeholder="0"
+                      placeholderTextColor={colors.gray400}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.priceSuffix}>원</Text>
+                  </View>
+                  {errors.memberPrice ? <Text style={styles.errorText}>{errors.memberPrice}</Text> : null}
+                </View>
+              )}
+
+              {priceTagType === 'closing' && (
+                <View style={styles.priceTagSubField}>
+                  <Text style={styles.fieldLabel}>
+                    마감 시각 <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.datePickerBtn, errors.endsAt ? styles.inputError : undefined]}
+                    onPress={() => setShowEndsAtPicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.datePickerText, !endsAt && styles.datePickerPlaceholder]}>
+                      {endsAt
+                        ? new Date(endsAt).toLocaleString('ko-KR', {
+                            hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric',
+                          })
+                        : '마감 시각 선택'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.endsAt ? <Text style={styles.errorText}>{errors.endsAt}</Text> : null}
+                  {showEndsAtPicker && (
+                    <DateTimePicker
+                      value={endsAt ? new Date(endsAt) : new Date()}
+                      mode="datetime"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={(_: DateTimePickerEvent, date?: Date) => {
+                        setShowEndsAtPicker(Platform.OS === 'ios');
+                        if (date) {
+                          setEndsAt(date.toISOString());
+                          setErrors((e) => ({ ...e, endsAt: undefined }));
+                        }
+                      }}
+                      locale="ko"
+                      minimumDate={new Date()}
+                    />
+                  )}
+                </View>
+              )}
+
+              {priceTagType === 'cardPayment' && (
+                <>
+                  <View style={styles.priceTagSubField}>
+                    <Text style={styles.fieldLabel}>
+                      카드명 <Text style={styles.required}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={[styles.input, errors.cardLabel ? styles.inputError : undefined]}
+                      value={cardLabel}
+                      onChangeText={(v) => {
+                        setCardLabel(v);
+                        if (v.trim()) setErrors((e) => ({ ...e, cardLabel: undefined }));
+                      }}
+                      placeholder="예: 신한카드, 현대 M포인트"
+                      placeholderTextColor={colors.gray400}
+                      maxLength={50}
+                    />
+                    {errors.cardLabel ? <Text style={styles.errorText}>{errors.cardLabel}</Text> : null}
+                  </View>
+
+                  <View style={styles.priceTagSubField}>
+                    <Text style={styles.fieldLabel}>
+                      할인 방식 <Text style={styles.required}>*</Text>
+                    </Text>
+                    <View style={styles.chipRow}>
+                      {CARD_DISCOUNT_OPTIONS.map((opt) => {
+                        const active = cardDiscountType === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.chip, active && styles.chipInkActive]}
+                            onPress={() => {
+                              setCardDiscountType(opt.value);
+                              setErrors((e) => ({ ...e, cardDiscountType: undefined }));
+                            }}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                          >
+                            <Text style={[styles.chipText, active && styles.chipTextInkActive]}>
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {errors.cardDiscountType ? <Text style={styles.errorText}>{errors.cardDiscountType}</Text> : null}
+                  </View>
+
+                  <View style={styles.priceTagSubField}>
+                    <Text style={styles.fieldLabel}>
+                      할인 값 <Text style={styles.required}>*</Text> {cardDiscountType === 'percent' ? '(%)' : '(원)'}
+                    </Text>
+                    <TextInput
+                      style={[styles.input, errors.cardDiscountValue ? styles.inputError : undefined]}
+                      value={cardDiscountValue}
+                      onChangeText={(v) => {
+                        setCardDiscountValue(v.replace(/[^0-9]/g, ''));
+                        setErrors((e) => ({ ...e, cardDiscountValue: undefined }));
+                      }}
+                      placeholder="0"
+                      placeholderTextColor={colors.gray400}
+                      keyboardType="numeric"
+                    />
+                    {errors.cardDiscountValue ? <Text style={styles.errorText}>{errors.cardDiscountValue}</Text> : null}
+                  </View>
+
+                  <View style={styles.priceTagSubField}>
+                    <Text style={styles.fieldLabel}>조건 메모 (선택)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={cardConditionNote}
+                      onChangeText={setCardConditionNote}
+                      placeholder="예: 3만원 이상 결제 시"
+                      placeholderTextColor={colors.gray400}
+                      maxLength={100}
+                    />
+                  </View>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* 메모 — 접이식 */}
+        <View style={styles.field}>
+          <TouchableOpacity
+            style={styles.collapsibleHeader}
+            onPress={() => {
+              LayoutAnimation.configureNext(
+                LayoutAnimation.create(200, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity),
+              );
+              setExpandMemo(!expandMemo);
+            }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandMemo }}
+          >
+            <Text style={styles.collapsibleTitle}>메모 (선택)</Text>
+            {expandMemo ? (
+              <ChevronUpIcon size={18} color={colors.gray600} />
+            ) : (
+              <ChevronDownIcon size={18} color={colors.gray600} />
+            )}
+          </TouchableOpacity>
+          {expandMemo && (
+            <View style={styles.collapsibleBody}>
+              <TextInput
+                style={[styles.input, styles.memoInput]}
+                value={memo}
+                onChangeText={setMemo}
+                placeholder="참고할 내용이 있다면 (최대 200자)"
+                placeholderTextColor={colors.gray400}
+                multiline
+                maxLength={200}
+                textAlignVertical="top"
+                accessibilityLabel="메모"
+              />
             </View>
           )}
         </View>
       </ScrollView>
 
-      {/* 등록 버튼 */}
       <View style={styles.footer}>
         {totalItems > 0 && editIndex === undefined && (
           <Text style={styles.footerCount}>현재 {totalItems}개 담긴 상태</Text>
         )}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={editIndex !== undefined ? '수정 완료' : '등록'}>
-          <Text style={styles.submitBtnText}>
-            {editIndex !== undefined ? '수정 완료' : '등록'}
+        <TouchableOpacity
+          style={[styles.submitBtn, submitDisabled && styles.submitBtnDisabled]}
+          onPress={handleSubmit}
+          activeOpacity={0.85}
+          disabled={submitDisabled}
+          accessibilityRole="button"
+          accessibilityLabel={editIndex !== undefined ? '수정 완료' : '등록하기'}
+          accessibilityState={{ disabled: submitDisabled }}
+        >
+          <Text style={[styles.submitBtnText, submitDisabled && styles.submitBtnTextDisabled]}>
+            {editIndex !== undefined ? '수정 완료' : '등록하기'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -956,99 +957,149 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray100 },
+  container: { flex: 1, backgroundColor: colors.surface },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: spacing.xxl },
-  storeRow: {
-    backgroundColor: colors.white,
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl + spacing.xxl,
+  },
+  kickerText: {
+    ...typography.tabLabel,
+    fontFamily: PJS.extraBold,
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  ocrBanner: {
+    backgroundColor: colors.successLight,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + spacing.micro,
+    borderRadius: spacing.radiusMd,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
     gap: spacing.sm,
   },
-  storeLabel: { ...typography.bodySm, fontWeight: '500' as const, color: colors.gray400 },
-  storeNameText: { ...typography.headingMd, flex: 1 },
-  field: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
+  ocrBannerIcon: { fontSize: spacing.iconSm },
+  ocrBannerText: {
+    ...typography.bodySm,
+    fontWeight: '700' as const,
+    color: colors.success,
   },
-  fieldLabel: { ...typography.tagText, fontWeight: '600' as const, color: colors.gray600, marginBottom: spacing.sm },
+
+  field: { marginTop: spacing.lg + spacing.micro },
+  fieldLabel: {
+    ...typography.bodySm,
+    fontWeight: '700' as const,
+    color: colors.onBackground,
+    marginBottom: spacing.sm,
+  },
+  required: { color: colors.danger },
+
+  // 일반 인풋 — 레퍼런스 inputStyle: 48h, 1px line, radius 10, 화이트
   input: {
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.white,
     borderRadius: spacing.radiusMd,
     paddingHorizontal: spacing.inputPad,
-    paddingVertical: spacing.md,
+    height: 48,
     ...typography.body,
     borderWidth: spacing.borderThin,
-    borderColor: 'transparent',
+    borderColor: colors.outlineVariant,
   },
-  inputError: {
-    borderColor: colors.danger,
-    borderWidth: spacing.borderThin,
-  },
+  inputError: { borderColor: colors.danger },
   errorText: {
     ...typography.bodySm,
     color: colors.danger,
     marginTop: spacing.xs,
   },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  priceInput: { flex: 1 },
-  priceSuffix: { ...typography.headingMd, color: colors.gray600 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  priceTagSubField: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: spacing.borderHairline,
-    borderTopColor: colors.gray100,
-    gap: spacing.sm,
-  },
-  chip: { backgroundColor: colors.gray100, borderRadius: spacing.radiusFull, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
-  chipActive: { backgroundColor: colors.primary },
-  chipText: { ...typography.tagText, color: colors.gray600 },
-  chipTextActive: { color: colors.white },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  collapsibleHeader: {
+
+  // 가격 입력 — 레퍼런스 inputWrap: 56h, 오른쪽정렬 큰 숫자
+  priceWrap: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-    borderBottomWidth: spacing.borderHairline,
-    borderBottomColor: colors.gray200,
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusMd,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    paddingHorizontal: spacing.lg,
+    height: 56,
   },
-  collapsibleTitle: {
+  priceInput: {
+    flex: 1,
+    ...typography.headingXl,
+    fontWeight: '800' as const,
+    color: colors.onBackground,
+    textAlign: 'right',
+    letterSpacing: -0.5,
+    padding: 0,
+  },
+  priceSuffix: {
+    ...typography.body,
+    fontWeight: '700' as const,
+    color: colors.onBackground,
+    marginLeft: spacing.xs + spacing.micro,
+  },
+
+  // 칩: 단위/PriceTag 공용 — 레퍼런스 pill
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + spacing.micro },
+  chip: {
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusFull,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md + spacing.micro,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+  },
+  chipInkActive: { backgroundColor: colors.onBackground, borderColor: colors.onBackground },
+  chipText: {
     ...typography.tagText,
     fontWeight: '600' as const,
+    color: colors.onBackground,
+  },
+  chipTextInkActive: { color: colors.white },
+  chipTextWhiteActive: { color: colors.white },
+
+  quantityInput: { marginTop: spacing.sm },
+
+  // 할인 토글 — 커스텀 pill (레퍼런스)
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  toggleTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: spacing.radiusFull,
+    backgroundColor: colors.outlineVariant,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleTrackOn: { backgroundColor: colors.primary },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: spacing.radiusFull,
+    backgroundColor: colors.white,
+    alignSelf: 'flex-start',
+  },
+  toggleThumbOn: { alignSelf: 'flex-end' },
+  toggleHelper: {
+    ...typography.bodySm,
     color: colors.gray600,
   },
-  optionalFieldGroup: {
-    gap: spacing.sm,
-    paddingTop: spacing.md,
-    borderTopWidth: spacing.borderHairline,
-    borderTopColor: colors.gray100,
-  },
+
+  // 이벤트 날짜
   dateSection: { marginTop: spacing.md, gap: spacing.sm },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   datePickerBtn: {
     flex: 1,
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.white,
     borderRadius: spacing.radiusMd,
     paddingHorizontal: spacing.inputPad,
-    paddingVertical: spacing.md,
+    height: 48,
+    justifyContent: 'center',
     borderWidth: spacing.borderThin,
-    borderColor: 'transparent',
+    borderColor: colors.outlineVariant,
   },
-  datePickerText: {
-    ...typography.body,
-  },
-  datePickerPlaceholder: {
-    color: colors.gray400,
-  },
+  datePickerText: { ...typography.body, color: colors.onBackground },
+  datePickerPlaceholder: { color: colors.gray400 },
   dateSep: { ...typography.body, color: colors.gray400 },
   todayBtn: {
     alignSelf: 'flex-start',
@@ -1057,28 +1108,90 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + spacing.micro,
     paddingHorizontal: spacing.inputPad,
   },
-  todayBtnText: { ...typography.tagText, fontWeight: '600' as const, color: colors.primary },
-  photoThumb: { width: '100%', height: spacing.imagePreviewH, borderRadius: spacing.radiusMd },
-  changePhotoText: { ...typography.bodySm, color: colors.primary, marginTop: spacing.xs + spacing.micro, textAlign: 'center' },
+  todayBtnText: {
+    ...typography.tagText,
+    fontWeight: '700' as const,
+    color: colors.primary,
+  },
+
+  // 사진 — 100×100
+  photoThumb: { width: 100, height: 100, borderRadius: spacing.radiusMd },
+  changePhotoText: {
+    ...typography.bodySm,
+    color: colors.primary,
+    marginTop: spacing.xs + spacing.micro,
+    width: 100,
+    textAlign: 'center',
+  },
   photoPlaceholder: {
-    height: spacing.cameraControlSize + spacing.md + spacing.md + spacing.md,
-    backgroundColor: colors.gray100,
+    width: 100,
+    height: 100,
+    backgroundColor: colors.surfaceContainerLow,
     borderRadius: spacing.radiusMd,
-    borderWidth: spacing.borderThin,
-    borderColor: colors.gray200,
+    borderWidth: 1.5,
+    borderColor: colors.outlineVariant,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  photoPlaceholderText: { ...typography.bodySm, color: colors.gray400 },
-  quantityInput: { marginTop: spacing.sm },
-  memoInput: { minHeight: spacing.cameraControlSize + spacing.md + spacing.md, paddingTop: spacing.md },
+  photoPlaceholderText: {
+    ...typography.tagText,
+    fontWeight: '600' as const,
+    color: colors.gray600,
+  },
+
+  // 품질 3칩 — flex:1, 활성시 primaryLight + primary 테두리/텍스트
+  qualityRow: { flexDirection: 'row', gap: spacing.xs + spacing.micro },
+  qualityChip: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: spacing.radiusMd,
+    backgroundColor: colors.white,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    alignItems: 'center',
+  },
+  qualityChipActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  qualityChipText: {
+    ...typography.bodySm,
+    fontWeight: '700' as const,
+    color: colors.onBackground,
+  },
+  qualityChipTextActive: { color: colors.primary },
+
+  // 접이식
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.inputPad,
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusMd,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+  },
+  collapsibleTitle: {
+    ...typography.bodySm,
+    fontWeight: '700' as const,
+    color: colors.onBackground,
+  },
+  collapsibleBody: {
+    marginTop: spacing.md,
+    gap: spacing.md,
+  },
+  priceTagSubField: { gap: spacing.sm },
+
+  // 제안 드롭다운
   suggestions: {
     backgroundColor: colors.white,
     borderRadius: spacing.radiusMd,
-    borderWidth: spacing.borderHairline,
-    borderColor: colors.gray200,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
     marginTop: spacing.xs,
     overflow: 'hidden',
   },
@@ -1088,27 +1201,46 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.inputPad,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray100,
+    borderBottomWidth: spacing.borderHairline,
+    borderBottomColor: colors.surfaceContainerLow,
   },
-  suggestionText: { ...typography.body },
-  suggestionUnit: { ...typography.bodySm, color: colors.gray400 },
+  suggestionText: { ...typography.body, color: colors.onBackground },
+  suggestionUnit: { ...typography.bodySm, color: colors.gray600 },
+
+  memoInput: {
+    height: undefined,
+    minHeight: 80,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+
+  // Footer
   footer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.gray200,
+    borderTopWidth: spacing.borderHairline,
+    borderTopColor: colors.outlineVariant,
   },
-  footerCount: { ...typography.bodySm, color: colors.primary, marginBottom: spacing.sm, textAlign: 'center' },
+  footerCount: {
+    ...typography.bodySm,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
   submitBtn: {
     backgroundColor: colors.primary,
-    borderRadius: spacing.md,
+    borderRadius: spacing.radiusMd,
     paddingVertical: spacing.lg,
     alignItems: 'center',
   },
-  submitBtnText: { ...typography.headingLg, color: colors.white },
+  submitBtnDisabled: { backgroundColor: colors.outlineVariant },
+  submitBtnText: {
+    ...typography.headingLg,
+    color: colors.white,
+  },
+  submitBtnTextDisabled: { color: colors.gray600 },
 });
 
 export default ItemDetailScreen;

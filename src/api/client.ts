@@ -59,7 +59,11 @@ apiClient.interceptors.response.use(
     }
 
     // 네트워크 에러 감지 (서버 응답 없음 = 네트워크 문제)
-    if (!error.response && error.code !== 'ERR_CANCELED') {
+    if (
+      !error.response &&
+      error.code !== 'ERR_CANCELED' &&
+      error.code !== 'ECONNABORTED'
+    ) {
       useNetworkStore.getState().setOffline(true);
     }
 

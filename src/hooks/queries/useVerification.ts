@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import type {
   VerificationListResponse,
   MyVerificationsResponse,
+  MyVerificationByPriceResponse,
   CreateVerificationDto,
   VerificationResponse,
 } from '../../types/api.types';
@@ -12,6 +13,7 @@ import type {
 export const verificationKeys = {
   detail: (priceId: string) => ['verifications', priceId] as const,
   mine: ['verifications', 'my'] as const,
+  mineByPrice: (priceId: string) => ['verifications', 'my', priceId] as const,
 };
 
 /**
@@ -38,6 +40,19 @@ export const useMyVerifications = () => {
 };
 
 /**
+ * 특정 가격에 대해 내가 남긴 검증 1건 조회
+ */
+export const useMyVerificationByPrice = (priceId: string) => {
+  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
+  return useQuery<MyVerificationByPriceResponse | null>({
+    queryKey: verificationKeys.mineByPrice(priceId),
+    queryFn: () =>
+      verificationApi.getMyVerificationByPrice(priceId).then((res) => res.data),
+    enabled: isLoggedIn && !!priceId,
+  });
+};
+
+/**
  * 가격 검증 생성 (맞아요/달라요)
  */
 export const useVerifyPrice = (priceId: string) => {
@@ -56,6 +71,9 @@ export const useVerifyPrice = (priceId: string) => {
       // 내가 인정한 가격 목록 갱신
       queryClient.invalidateQueries({
         queryKey: verificationKeys.mine,
+      });
+      queryClient.invalidateQueries({
+        queryKey: verificationKeys.mineByPrice(priceId),
       });
     },
   });
