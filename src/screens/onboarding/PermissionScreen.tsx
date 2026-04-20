@@ -53,9 +53,9 @@ const PERMISSION_LIST: PermissionConfig[] = [
   },
 ];
 
-const ICON_SIZE = 48;
-const ICON_BOX = 56;
-const ICON_RADIUS = 16;
+const ICON_BOX = spacing.headerIconSize; // 40
+const ICON_RADIUS = spacing.radiusMd;    // 10 → 시안과 유사한 12에 가까움
+const ICON_GLYPH = ICON_BOX / 2;         // 아이콘 글리프 크기
 
 const requestAndroidSystemPermission = async (config: PermissionConfig): Promise<boolean> => {
   const permission =
@@ -141,9 +141,12 @@ const PermissionScreen: React.FC = () => {
             const { Icon } = item;
             const isGranted = permissionStatuses[item.key];
             return (
-              <View key={item.key} style={styles.item}>
+              <View
+                key={item.key}
+                style={[styles.item, isGranted && styles.itemGranted]}
+              >
                 <View style={styles.iconBox}>
-                  <Icon size={ICON_SIZE / 2} color={colors.primary} />
+                  <Icon size={ICON_GLYPH} color={colors.primary} />
                 </View>
                 <View style={styles.itemText}>
                   <View style={styles.itemTitleRow}>
@@ -158,7 +161,7 @@ const PermissionScreen: React.FC = () => {
                 </View>
                 {isGranted && (
                   <View style={styles.statusIcon}>
-                    <CheckIcon size={20} color={colors.success} />
+                    <CheckIcon size={16} color={colors.white} />
                   </View>
                 )}
               </View>
@@ -196,12 +199,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   list: {
-    gap: spacing.xl,
+    gap: spacing.sm,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 14,
+  },
+  itemGranted: {
+    backgroundColor: colors.successLight,
+    borderColor: colors.success,
   },
   iconBox: {
     width: ICON_BOX,
@@ -238,10 +250,10 @@ const styles = StyleSheet.create({
     color: colors.gray600,
   },
   statusIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.successLight,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
@@ -252,7 +264,7 @@ const styles = StyleSheet.create({
   },
   allowButton: {
     backgroundColor: colors.primary,
-    borderRadius: spacing.md,
+    borderRadius: 14,
     paddingVertical: spacing.lg,
     alignItems: 'center',
   },

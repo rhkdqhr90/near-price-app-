@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
-  View, TouchableOpacity, StyleSheet, Alert,
+  View, Text, TouchableOpacity, StyleSheet, Alert,
   Platform, PermissionsAndroid,
   TextInput,
 } from 'react-native';
@@ -435,6 +435,16 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
+      {/* STEP 배지 */}
+      <View
+        style={[styles.stepBadge, { top: insets.top + spacing.headerHeight + spacing.xs }]}
+        pointerEvents="none"
+      >
+        <Text style={styles.stepBadgeText}>STEP 1 / 3</Text>
+        <View style={styles.stepBadgeDivider} />
+        <Text style={styles.stepBadgeTitle}>어디서 장보고 계세요?</Text>
+      </View>
+
       {/* 감지된 매장 시트 */}
       {uiMode === 'detected' && detectedStore ? (
         <DetectedStoreSheet
@@ -482,57 +492,92 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   map: { flex: 1 },
 
-  // ─── 상단 검색바 오버레이 ──────────────────────────────────────────────────────
+  // ─── 상단 검색바 오버레이 (플로팅 카드 스타일) ─────────────────────────────
   searchBarOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray100,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
-    shadowOpacity: 0.08,
-    shadowRadius: spacing.shadowRadiusMd,
-    elevation: 40,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: 'transparent',
     zIndex: 40,
   },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   searchBar: {
     flex: 1,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.gray100,
-    borderRadius: spacing.radiusMd,
+    backgroundColor: colors.white,
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     gap: spacing.sm,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
     ...typography.body,
+    color: colors.onBackground,
     padding: 0,
   },
 
   backFab: {
-    width: 40,
-    height: 40,
-    borderRadius: spacing.radiusFull,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.black,
-    shadowOffset: { width: 0, height: spacing.shadowOffsetYMd },
-    shadowOpacity: 0.15,
-    shadowRadius: spacing.shadowRadiusMd,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 4,
+  },
+
+  // ─── STEP 라벨 (플로팅) ─────────────────────────────────────────────────
+  stepBadge: {
+    position: 'absolute',
+    left: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: spacing.radiusFull,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    zIndex: 30,
+  },
+  stepBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  stepBadgeDivider: {
+    width: 1,
+    height: 10,
+    backgroundColor: colors.gray200,
+    marginHorizontal: spacing.sm,
+  },
+  stepBadgeTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.onBackground,
+    letterSpacing: -0.2,
   },
 });
 
