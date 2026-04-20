@@ -28,13 +28,13 @@ KEY_PASSWORD=<비밀번호>
 ---
 
 ### 2. 카카오 개발자 콘솔 키해시 등록
-1. Release keystore SHA-256 추출:
+1. Release keystore 키해시(Base64) 추출:
    ```bash
-   keytool -list -v -keystore near-price-release.keystore -alias near-price-key
+   keytool -exportcert -alias near-price-key -keystore near-price-release.keystore | openssl sha1 -binary | openssl base64
    ```
-2. https://developers.kakao.com → 내 앱 → 플랫폼 → Android
+2. https://developers.kakao.com → 앱설정 → 앱 → 플랫폼키 → 네이티브 앱 키
 3. 패키지명: `com.nearpriceapp`
-4. 키해시: 위에서 추출한 SHA-256 값 입력
+4. 키해시: 위에서 추출한 Base64 값 입력
 
 ---
 

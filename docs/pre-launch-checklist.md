@@ -19,14 +19,14 @@
 |------|------|------|
 | `near-price-release.keystore` 파일 생성 | ⬜ | `android/app/` 위치, git 제외됨 — 로컬 파일 확인 필요 |
 | `android/gradle.properties`에 KEYSTORE_PATH 등 4개 값 설정 | ⬜ | 로컬 릴리스 빌드용 |
-| GitHub Secrets에 KEYSTORE_BASE64 등 4개 등록 | ⬜ | CI/CD 자동 빌드용 (`project_github_secrets.md` 참조) |
-| `./gradlew assembleRelease` 빌드 성공 확인 | ⬜ | |
+| GitHub Secrets 등록 (`PROD_API_BASE_URL`, `PROD_KAKAO_APP_KEY`, `PROD_NAVER_MAP_CLIENT_ID`, `KEYSTORE_*`) | ⬜ | CI/CD 자동 빌드용 (`project_github_secrets.md` 참조) |
+| `./gradlew assembleProdRelease` 빌드 성공 확인 | ⬜ | |
 
 ### 카카오 로그인
 | 항목 | 상태 | 비고 |
 |------|------|------|
 | 카카오 개발자 콘솔 — 플랫폼 등록 (패키지명: `com.nearpriceapp`) | ⬜ | https://developers.kakao.com |
-| Release keystore SHA-256 키해시 등록 | ⬜ | `keytool -list -v -keystore near-price-release.keystore` |
+| Release keystore Base64 키해시 등록 | ⬜ | `keytool -exportcert -alias near-price-key -keystore near-price-release.keystore \| openssl sha1 -binary \| openssl base64` |
 | `KAKAO_APP_KEY` 환경변수 (CI Secrets + 로컬 .env) | ⬜ | |
 
 ### 네이버 지도 SDK
@@ -40,7 +40,7 @@
 |------|------|------|
 | 프로덕션 서버 배포 완료 | ⬜ | `https://api.nearprice.kr` |
 | DB 마이그레이션 프로덕션 실행 | ⬜ | `npm run typeorm:migration:run` |
-| `API_BASE_URL` 분기 확인 (`__DEV__` false → 프로덕션 URL) | ✅ | config.ts 완료 |
+| `prodRelease`가 `.env.production`의 `API_BASE_URL` 사용 확인 | ⬜ | fallback 금지 |
 
 ### 법적 요건 (한국 앱 의무)
 | 항목 | 상태 | 비고 |
@@ -127,15 +127,15 @@
 ## 릴리스 빌드 명령어
 
 ```bash
-# 1. JS 번들 + APK 빌드
+# 1. 로컬 테스트 APK 빌드
 cd near-price-app/android
-./gradlew assembleRelease
+ENVFILE=../.env.local ./gradlew assembleLocalRelease
 
-# 2. AAB 빌드 (Play Store 권장)
-./gradlew bundleRelease
+# 2. 프로덕션 AAB 빌드 (Play Store 업로드)
+ENVFILE=../.env.production ./gradlew bundleProdRelease
 
-# APK 경로: android/app/build/outputs/apk/release/app-release.apk
-# AAB 경로: android/app/build/outputs/bundle/release/app-release.aab
+# APK 경로: android/app/build/outputs/apk/local/release/app-local-release.apk
+# AAB 경로: android/app/build/outputs/bundle/prodRelease/app-prod-release.aab
 ```
 
 ## keystore 생성 명령어 (최초 1회)
@@ -147,6 +147,6 @@ keytool -genkeypair -v \
   -keyalg RSA -keysize 2048 \
   -validity 10000
 
-# SHA-256 해시 확인 (카카오 등록용)
-keytool -list -v -keystore near-price-release.keystore
+# Base64 키해시 확인 (카카오 등록용)
+keytool -exportcert -alias near-price-key -keystore near-price-release.keystore | openssl sha1 -binary | openssl base64
 ```
