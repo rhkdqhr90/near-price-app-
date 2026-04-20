@@ -2,6 +2,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Linking } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { launchImageLibrary } from 'react-native-image-picker';
+import * as Sentry from '@sentry/react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import { colors } from '../../theme/colors';
@@ -55,7 +56,10 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const photo = await cameraRef.current.takePhoto();
       navigation.navigate('OcrResult', { imageUri: `file://${photo.path}` });
-    } catch {
+    } catch (error) {
+      if (!__DEV__) {
+        Sentry.captureException(error, { tags: { screen: 'CameraScreen', action: 'takePhoto' } });
+      }
       Alert.alert('오류', '사진 촬영에 실패했습니다. 다시 시도해주세요.');
     } finally {
       isCapturingRef.current = false;

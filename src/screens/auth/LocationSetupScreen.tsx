@@ -297,8 +297,14 @@ const LocationSetupScreen = ({ navigation, route }: Props) => {
         </View>
       )}
 
-      {/* ── 상단 플로팅 검색바 ────────────────────────────────────────── */}
+      {/* ── 상단 플로팅 헤더 + 검색바 ─────────────────────────────────── */}
       <View style={[styles.topBar, { top: topBarTop }]}>
+        <View style={styles.stepBadge} pointerEvents="none">
+          <Text style={styles.stepBadgeText}>STEP 2/2</Text>
+          <View style={styles.stepBadgeDivider} />
+          <Text style={styles.stepBadgeTitle}>동네 설정</Text>
+        </View>
+
         <Pressable
           style={styles.searchPill}
           onPress={() => setIsSearchModalVisible(true)}
@@ -505,7 +511,40 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.xl,
     right: spacing.xl,
+    gap: spacing.sm,
     // top은 인라인 (insets.top 의존)
+  },
+  stepBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  stepBadgeText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: colors.white,
+    letterSpacing: 1.5,
+  },
+  stepBadgeDivider: {
+    width: 1,
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  stepBadgeTitle: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: colors.white,
+    letterSpacing: -0.3,
   },
   searchPill: {
     flexDirection: 'row',

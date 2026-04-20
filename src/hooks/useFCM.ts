@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import messaging from '@react-native-firebase/messaging';
 import { Alert } from 'react-native';
 import { useAuthStore } from '../store/authStore';
@@ -22,11 +22,11 @@ export const useFCM = () => {
     }
   }, [user?.id]);
 
-  const isMountedRef = useRef(false);
-
   useEffect(() => {
     if (!user?.id) return;
-    isMountedRef.current = true;
+    // effect-scope 플래그. user.id 변경/언마운트 시 false로 바뀌므로
+    // 이전 effect의 pending setup이 현재 effect를 오염시키지 않음.
+    let isActive = true;
     let cleanupFn: (() => void) | undefined;
 
     const setup = async () => {
@@ -38,7 +38,7 @@ export const useFCM = () => {
 
       // OS 권한 상태를 store에 반영 (권한 거부 시 앱 내 알림도 OFF)
       if (!enabled) {
-        if (isMountedRef.current) {
+        if (isActive) {
           setAllNotifications(false);
         }
         return undefined;
@@ -54,13 +54,13 @@ export const useFCM = () => {
 
       // 3. 토큰 갱신
       const unsubToken = messaging().onTokenRefresh(async (newToken) => {
-        if (!isMountedRef.current) return;
+        if (!isActive) return;
         await saveFcmToken(newToken);
       });
 
       // 4. 포그라운드 알림 — 언마운트 후 Alert 호출 방지
       const unsubMessage = messaging().onMessage(async (remoteMessage) => {
-        if (!isMountedRef.current) return;
+        if (!isActive) return;
         const title = remoteMessage.notification?.title ?? '알림';
         const body = remoteMessage.notification?.body ?? '';
         Alert.alert(title, body);
@@ -72,19 +72,21 @@ export const useFCM = () => {
       };
     };
 
-    setup().then((fn) => {
-      if (!isMountedRef.current) {
-        // 언마운트 후 setup 완료 — 리스너 즉시 정리
-        fn?.();
-      } else {
-        cleanupFn = fn;
-      }
-    }).catch(() => {
-      // setup 자체 실패 — 앱 동작에 영향 없음
-    });
+    setup()
+      .then((fn) => {
+        if (!isActive) {
+          // 언마운트/재실행 후 setup 완료 — 리스너 즉시 정리
+          fn?.();
+        } else {
+          cleanupFn = fn;
+        }
+      })
+      .catch(() => {
+        // setup 자체 실패 — 앱 동작에 영향 없음
+      });
 
     return () => {
-      isMountedRef.current = false;
+      isActive = false;
       cleanupFn?.();
     };
   }, [user?.id, saveFcmToken, setAllNotifications]);
