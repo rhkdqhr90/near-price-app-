@@ -156,15 +156,13 @@ const LocationSetupScreen = ({ navigation, route }: Props) => {
           return;
         }
         const { latitude, longitude } = position.coords;
-        const isSameCoord =
-          gpsLatLng !== null && gpsLatLng.lat === latitude && gpsLatLng.lng === longitude;
         setGpsLatLng({ lat: latitude, lng: longitude });
         invalidateAndRefetch()
           .catch(() => {})
           .finally(() => {
             clearTimeout(safetyTimer);
-            // 동일 좌표면 useEffect(resultKey)가 스킵되므로 여기서 직접 해제
-            if (isSameCoord && isMountedRef.current) setIsGpsLoading(false);
+            // 성공/실패 양쪽 보장: 캐시 히트 등으로 useEffect(resultKey)가 스킵되는 경우에도 로딩이 무한히 남지 않도록 무조건 해제
+            if (isMountedRef.current) setIsGpsLoading(false);
           });
       },
       () => {
