@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { StackActions } from '@react-navigation/native';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import type { CreatePriceDto } from '../../types/api.types';
 import type { ConfirmItem } from '../../store/priceRegisterStore';
@@ -35,24 +34,30 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
   const { mutate: submitAll, isPending } = useMutation({
     mutationFn: async (confirmItems: ConfirmItem[]) => {
       if (!storeId) throw new Error('매장 정보가 없습니다.');
-      let failedCount = 0;
-      let firstErrorMessage: string | null = null;
       for (let i = 0; i < confirmItems.length; i++) {
         if (succeededIndicesRef.current.includes(i)) continue;
         const item = confirmItems[i];
         try {
           let imageUrl = '';
           if (item.imageUri) {
-            const upload = await uploadApi.uploadImage(item.imageUri, 'price.jpg', 'image/jpeg');
+            const upload = await uploadApi
+              .uploadImage(item.imageUri, 'price.jpg', 'image/jpeg')
+              .catch((error) => {
+                throw new Error(`이미지 업로드 실패: ${getErrorMessage(error)}`);
+              });
             imageUrl = upload.data?.url ?? '';
           }
           let productId = item.productId;
           if (!productId) {
-            const product = await productApi.create({
-              name: item.productName,
-              category: 'other',
-              unitType: item.unitType ?? 'other',
-            });
+            const product = await productApi
+              .create({
+                name: item.productName,
+                category: 'other',
+                unitType: item.unitType ?? 'other',
+              })
+              .catch((error) => {
+                throw new Error(`상품 생성 실패: ${getErrorMessage(error)}`);
+              });
             productId = product.data.id;
           }
           const dto: CreatePriceDto = {
@@ -78,31 +83,39 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
             cardConditionNote: item.cardConditionNote,
             note: item.memo,
           };
-          await priceApi.create(dto);
+          await priceApi.create(dto).catch((error) => {
+            throw new Error(`가격 저장 실패: ${getErrorMessage(error)}`);
+          });
           succeededIndicesRef.current.push(i);
         } catch (error) {
-          failedCount += 1;
-          if (!firstErrorMessage) {
-            firstErrorMessage = getErrorMessage(error);
-          }
+          const reason =
+            error instanceof Error && error.message
+              ? error.message
+              : getErrorMessage(error);
+          throw new Error(`${item.productName} 등록 실패: ${reason}`);
         }
-      }
-      if (failedCount > 0) {
-        throw new Error(
-          firstErrorMessage
-            ? `${failedCount}개 항목 등록 실패: ${firstErrorMessage}`
-            : `${failedCount}개 항목 등록 실패`,
-        );
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: priceKeys.all });
       showToast('가격 등록이 완료됐어요!', 'success');
+
+      const successIndices =
+        succeededIndicesRef.current.length > 0
+          ? [...succeededIndicesRef.current]
+          : items.map((_, idx) => idx);
+      const firstSuccessItem =
+        successIndices.length > 0 ? items[successIndices[0]] : items[0];
+
       InteractionManager.runAfterInteractions(() => {
-        navigation.dispatch(StackActions.popToTop());
-        // 'as never' — React Navigation CompositeScreenProps 타입 추론 한계로 인한 워크어라운드
-        navigation.getParent()?.navigate('HomeStack' as never);
+        navigation.replace('Done', {
+          itemCount: successIndices.length,
+          storeName: storeName ?? undefined,
+          firstItemName: firstSuccessItem?.productName,
+          firstItemPrice: firstSuccessItem?.price,
+        });
         reset();
+        succeededIndicesRef.current = [];
       });
     },
     onError: (error) => {
