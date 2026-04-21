@@ -22,7 +22,6 @@ import { typography, PJS } from '../../theme/typography';
 import CameraIcon from '../../components/icons/CameraIcon';
 import ChevronDownIcon from '../../components/icons/ChevronDownIcon';
 import ChevronUpIcon from '../../components/icons/ChevronUpIcon';
-import { getUnitLabel } from '../../utils/unitLabel';
 
 type Props = PriceRegisterScreenProps<'ItemDetail'>;
 
@@ -58,6 +57,26 @@ const UNIT_OPTIONS: { label: string; value: UnitType }[] = [
   { label: '봉', value: 'bag' },
   { label: '기타', value: 'other' },
 ];
+
+// 단위 카테고리별 UX 메타: 필드 라벨 + placeholder + 입력 설명
+const WEIGHT_UNITS: UnitType[] = ['kg', 'g', 'ml', 'l'];
+const COUNT_UNITS: UnitType[] = ['count', 'bunch', 'pack', 'bag'];
+function getUnitInputMeta(unit: UnitType | undefined): {
+  label: string;
+  placeholder: string;
+} {
+  if (!unit) return { label: '단위 · 수량', placeholder: '수량 (예: 1, 30, 600)' };
+  if (WEIGHT_UNITS.includes(unit)) {
+    return {
+      label: `${unit} 기준 중량 · 용량`,
+      placeholder: `숫자만 입력 (예: 500)`,
+    };
+  }
+  if (COUNT_UNITS.includes(unit)) {
+    return { label: '수량', placeholder: '숫자만 입력 (예: 1)' };
+  }
+  return { label: '수량', placeholder: '수량을 입력하세요' };
+}
 
 const QUALITY_OPTIONS = [
   { label: '상', value: 'HIGH' as const },
@@ -424,7 +443,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   onPress={() => {
                     setProductName(p.name);
                     setProductId(p.id);
-                    setSelectedUnit(p.unitType);
+                    // unitType은 Price 속성으로 이관됨 — 사용자가 단위 칩에서 직접 선택.
                     setShowSuggestions(false);
                   }}
                   onPressIn={() => {
@@ -432,7 +451,6 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   }}
                 >
                   <Text style={styles.suggestionText}>{p.name}</Text>
-                  <Text style={styles.suggestionUnit}>{getUnitLabel(p.unitType)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -461,40 +479,45 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           ) : null}
         </View>
 
-        {/* 단위 · 수량 */}
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>단위 · 수량</Text>
-          <View style={styles.chipRow}>
-            {UNIT_OPTIONS.map(opt => {
-              const active = selectedUnit === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.chip, active && styles.chipInkActive]}
-                  onPress={() => setSelectedUnit(active ? undefined : opt.value)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`단위 ${opt.label}`}
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextInkActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {selectedUnit && (
-            <TextInput
-              style={[styles.input, styles.quantityInput]}
-              value={quantity}
-              onChangeText={setQuantity}
-              placeholder="수량 (예: 1, 30, 600)"
-              placeholderTextColor={colors.gray400}
-              keyboardType="numeric"
-              accessibilityLabel="수량"
-            />
-          )}
-        </View>
+        {/* 단위 · 수량 (단위별 라벨/placeholder 동적) */}
+        {(() => {
+          const meta = getUnitInputMeta(selectedUnit);
+          return (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>{meta.label}</Text>
+              <View style={styles.chipRow}>
+                {UNIT_OPTIONS.map(opt => {
+                  const active = selectedUnit === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[styles.chip, active && styles.chipInkActive]}
+                      onPress={() => setSelectedUnit(active ? undefined : opt.value)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`단위 ${opt.label}`}
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextInkActive]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {selectedUnit && (
+                <TextInput
+                  style={[styles.input, styles.quantityInput]}
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  placeholder={meta.placeholder}
+                  placeholderTextColor={colors.gray400}
+                  keyboardType="numeric"
+                  accessibilityLabel={meta.label}
+                />
+              )}
+            </View>
+          );
+        })()}
 
         {/* 할인 중인가요? — 레퍼런스 커스텀 pill 토글 */}
         <View style={styles.field}>
