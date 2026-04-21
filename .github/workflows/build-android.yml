@@ -101,17 +101,17 @@ jobs:
               fi
             done
 
-            cat > "$ENV_FILE" << EOF
-API_BASE_URL=${PROD_API_BASE_URL}
-KAKAO_APP_KEY=${PROD_KAKAO_APP_KEY}
-NAVER_MAP_CLIENT_ID=${PROD_NAVER_MAP_CLIENT_ID}
-EOF
+            {
+              echo "API_BASE_URL=${PROD_API_BASE_URL}"
+              echo "KAKAO_APP_KEY=${PROD_KAKAO_APP_KEY}"
+              echo "NAVER_MAP_CLIENT_ID=${PROD_NAVER_MAP_CLIENT_ID}"
+            } > "$ENV_FILE"
           else
-            cat > "$ENV_FILE" << EOF
-API_BASE_URL=${LOCAL_API_BASE_URL:-http://10.0.2.2:3000}
-KAKAO_APP_KEY=${LOCAL_KAKAO_APP_KEY:-KAKAO_APP_KEY_NOT_SET}
-NAVER_MAP_CLIENT_ID=${LOCAL_NAVER_MAP_CLIENT_ID:-NAVER_MAP_CLIENT_ID_NOT_SET}
-EOF
+            {
+              echo "API_BASE_URL=${LOCAL_API_BASE_URL:-http://10.0.2.2:3000}"
+              echo "KAKAO_APP_KEY=${LOCAL_KAKAO_APP_KEY:-KAKAO_APP_KEY_NOT_SET}"
+              echo "NAVER_MAP_CLIENT_ID=${LOCAL_NAVER_MAP_CLIENT_ID:-NAVER_MAP_CLIENT_ID_NOT_SET}"
+            } > "$ENV_FILE"
           fi
 
       - name: 필수 시크릿 존재 확인 (공통)
