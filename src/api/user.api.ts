@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type {
+  PublicUserResponse,
   UserResponse,
   UpdateNicknameDto,
   UpdateNotificationSettingsDto,
@@ -38,7 +39,7 @@ export const userApi = {
   },
 
   getUser: async (userId: string) => {
-    const response = await apiClient.get<UserResponse>(`/user/${userId}`);
+    const response = await apiClient.get<PublicUserResponse>(`/user/${userId}`);
     return response.data;
   },
 

@@ -26,7 +26,6 @@ import WifiOffIcon from '../../components/icons/WifiOffIcon';
 import ChevronLeftIcon from '../../components/icons/ChevronLeftIcon';
 import ShareIcon from '../../components/icons/ShareIcon';
 import HeartIcon from '../../components/icons/HeartIcon';
-import MapPinIcon from '../../components/icons/MapPinIcon';
 import TagIcon from '../../components/icons/TagIcon';
 import PriceRangeBar from '../../components/price/PriceRangeBar';
 import StoreRankRow, { type StoreRankRowData } from '../../components/price/StoreRankRow';
@@ -411,7 +410,7 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const heroPrice = lowPrice.toLocaleString('ko-KR');
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       {/* ─── (A) Sticky Header ────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
@@ -633,22 +632,11 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         ) : null}
 
-        <View style={{ height: spacing.xxl + insets.bottom + spacing.stickyReactionBarHeight }} />
+        <View style={{ height: spacing.xxl + spacing.stickyReactionBarHeight }} />
       </ScrollView>
 
-      {/* ─── (F) Sticky Bottom CTA ─────────────────────────────────────────── */}
-      <View style={[styles.ctaBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <TouchableOpacity
-          style={styles.mapBtn}
-          onPress={() => {
-            /* 추후 StoreDetailScreen 또는 외부 지도 연동 */
-            showToast('지도 보기는 준비 중이에요', 'info');
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="지도에서 보기"
-        >
-          <MapPinIcon size={spacing.iconLg} color={colors.onBackground} />
-        </TouchableOpacity>
+      {/* ─── (F) Sticky Bottom CTA — 탭바 바로 위 밀착 ───────────────────── */}
+      <View style={styles.ctaBar}>
         <TouchableOpacity
           style={styles.ctaPrimary}
           onPress={handleRegisterNew}
@@ -1062,25 +1050,14 @@ const styles = StyleSheet.create({
     color: colors.onErrorContainer,
   },
 
-  // ─── (F) CTA Bar ───────────────────────────────────────────────────────────
+  // ─── (F) CTA Bar — 탭바 바로 위 밀착. SafeArea는 TabBar가 처리함. ─────
   ctaBar: {
     flexDirection: 'row',
-    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm + 2,
+    paddingVertical: spacing.sm,
     backgroundColor: colors.white,
     borderTopWidth: spacing.borderHairline,
     borderTopColor: colors.outlineVariant,
-  },
-  mapBtn: {
-    width: MAP_BTN_SIZE,
-    height: MAP_BTN_SIZE,
-    borderRadius: spacing.md,
-    borderWidth: spacing.borderThin,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   ctaPrimary: {
     flex: 1,

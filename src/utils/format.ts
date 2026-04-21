@@ -12,7 +12,7 @@ export const fixImageUrl = (url: string | null | undefined): string | null => {
     return `${API_BASE_URL}/${url.replace(/^\//, '')}`;
   }
   return url.replace(
-    /https?:\/\/(?:localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+):\d+/g,
+    /https?:\/\/(?:localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+/g,
     API_BASE_URL,
   );
 };

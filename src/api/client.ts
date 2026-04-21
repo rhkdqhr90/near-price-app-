@@ -49,8 +49,8 @@ const performTokenRefresh = async (): Promise<string> => {
 
 apiClient.interceptors.response.use(
   (response) => {
-    // 요청 성공 → 오프라인 상태 해제
-    useNetworkStore.getState().setOffline(false);
+    // 요청 성공 → 네트워크 에러 누적/오프라인 상태 해제
+    useNetworkStore.getState().markRequestSuccess();
     return response;
   },
   async (error: unknown) => {
@@ -64,7 +64,7 @@ apiClient.interceptors.response.use(
       error.code !== 'ERR_CANCELED' &&
       error.code !== 'ECONNABORTED'
     ) {
-      useNetworkStore.getState().setOffline(true);
+      useNetworkStore.getState().markTransportFailure();
     }
 
     const config = error.config as RetryConfig;

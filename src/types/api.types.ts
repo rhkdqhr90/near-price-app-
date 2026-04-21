@@ -32,6 +32,18 @@ export interface UserResponse {
   updatedAt: string;
 }
 
+export interface PublicUserResponse {
+  id: string;
+  nickname: string;
+  latitude: number | null;
+  longitude: number | null;
+  trustScore: number;
+  notifPriceChange: boolean;
+  notifPromotion: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UpdateNicknameDto {
   nickname: string;
 }
@@ -134,7 +146,7 @@ export interface PaginatedResponse<T> {
 
 export interface PriceResponse {
   id: string;
-  user: UserResponse | null;
+  user: PublicUserResponse | null;
   store: StoreResponse;
   product: ProductResponse;
   price: number;
@@ -207,7 +219,7 @@ export interface WishlistItem {
   productId: string;
   productName: string;
   category: ProductCategory;
-  unitType: UnitType;
+  unitType: UnitType | null;
   lowestPrice: number | null;
   lowestPriceStoreName: string | null;
   imageUrl: string | null;

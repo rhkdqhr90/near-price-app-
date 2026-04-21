@@ -3,7 +3,7 @@ import type { StoreResponse, CreateStoreDto, NearbyStoreResponse, StoreReviewRes
 
 export const storeApi = {
   getAll: () =>
-    apiClient.get<StoreResponse[]>('/store'),
+    apiClient.get<PaginatedResponse<StoreResponse>>('/store'),
 
   getOne: (id: string) =>
     apiClient.get<StoreResponse>(`/store/${id}`),

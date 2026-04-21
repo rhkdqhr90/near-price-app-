@@ -38,6 +38,11 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
   const registrantName = item.registrant?.nickname ?? '익명';
   const relativeTime = formatRelativeTime(item.createdAt);
   const imageUri = fixImageUrl(item.imageUrl);
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUri]);
 
   // 진행바: minPrice → maxPrice 사이 비율 (최저가는 0, 최고가는 1)
   // 홈에서 최저가 카드만 보이므로 현재가는 항상 minPrice (= 0% 위치).
@@ -58,8 +63,12 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
       accessibilityLabel={`${item.productName} ${formatPrice(item.minPrice)}원`}
     >
       <View style={styles.row}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} />
+        {imageUri && !imageLoadFailed ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.image}
+            onError={() => setImageLoadFailed(true)}
+          />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>

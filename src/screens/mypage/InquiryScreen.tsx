@@ -61,6 +61,12 @@ const InquiryScreen: React.FC<Props> = ({ navigation }) => {
 
   const { mutate: submitInquiry, isPending } = useMutation({
     mutationFn: (dto: CreateInquiryDto) => inquiryApi.createInquiry(dto),
+    retry: (failureCount, error) => {
+      if (!isAxiosError(error)) return false;
+      // 응답이 없는 일시적 전송 실패는 1회 자동 재시도
+      return !error.response && error.code !== 'ERR_CANCELED' && failureCount < 1;
+    },
+    retryDelay: 500,
     onSuccess: () => {
       Alert.alert('성공', '문의가 접수되었습니다. 빠른 답변 부탁드립니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
@@ -72,6 +78,8 @@ const InquiryScreen: React.FC<Props> = ({ navigation }) => {
         const data: unknown = error.response?.data;
         if (data !== null && typeof data === 'object' && 'message' in data && typeof (data as { message?: unknown }).message === 'string') {
           message = (data as { message: string }).message;
+        } else if (!error.response) {
+          message = '서버 연결이 불안정합니다. 잠시 후 다시 시도해주세요.';
         } else if (error.response?.status === 400) {
           message = '입력값이 올바르지 않습니다.';
         }

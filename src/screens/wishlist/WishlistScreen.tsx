@@ -112,7 +112,7 @@ const WishlistScreen: React.FC<Props> = ({ navigation }) => {
   // ── 카드 (모든 아이템 동일 레이아웃) ────────────────────────────────────
   const renderItem = useCallback(({ item }: ListRenderItemInfo<WishlistItem>) => {
     const categoryLabel = CATEGORY_LABEL[item.category] ?? '기타';
-    const unitLabel = UNIT_LABEL[item.unitType] ?? '';
+    const unitLabel = item.unitType ? (UNIT_LABEL[item.unitType] ?? '') : '';
     const imageUri = fixImageUrl(item.imageUrl);
     return (
       <Pressable

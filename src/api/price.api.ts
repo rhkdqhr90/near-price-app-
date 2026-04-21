@@ -15,7 +15,7 @@ export const priceApi = {
     apiClient.get<PriceResponse[]>('/price/by-name', { params: { name } }),
 
   getAll: () =>
-    apiClient.get<PriceResponse[]>('/price'),
+    apiClient.get<PaginatedResponse<PriceResponse>>('/price'),
 
   getMy: () =>
     apiClient.get<PaginatedResponse<PriceResponse>>('/price/my'),
