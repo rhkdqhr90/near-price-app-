@@ -76,7 +76,7 @@ export const naverLocalApi = {
     // regionHint가 있으면 검색어에 동네 이름 추가 (위치 기반 검색 효과)
     const searchQuery = regionHint ? `${regionHint} ${query}` : query;
     const res = await apiClient.get<NaverLocalResponse>('/naver/search', {
-      params: { query: searchQuery, display: 10, sort: 'sim' },
+      params: { query: searchQuery, display: 10, sort: 'random' },
     });
     return (res.data.items ?? [])
       .map((item) => {
