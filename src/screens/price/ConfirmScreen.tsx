@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Image,
-  StyleSheet, Alert, InteractionManager, type ListRenderItemInfo,
+  StyleSheet, Alert, ActivityIndicator, type ListRenderItemInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,10 +30,19 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
   const { storeId, storeName, items, removeItem, reset } = usePriceRegisterStore();
   // 부분 성공한 항목 인덱스 추적 (중복 등록 방지)
   const succeededIndicesRef = useRef<number[]>([]);
+  // beforeRemove 가드 제어용 — onSuccess에서 동기 해제 후 replace.
+  const submittingRef = useRef(false);
+  const totalRef = useRef(0);
+  const progressRef = useRef(0);
+  const [progressTick, setProgressTick] = React.useState(0);
 
   const { mutate: submitAll, isPending } = useMutation({
     mutationFn: async (confirmItems: ConfirmItem[]) => {
       if (!storeId) throw new Error('매장 정보가 없습니다.');
+      submittingRef.current = true;
+      totalRef.current = confirmItems.length;
+      progressRef.current = succeededIndicesRef.current.length;
+      setProgressTick((n) => n + 1);
       for (let i = 0; i < confirmItems.length; i++) {
         if (succeededIndicesRef.current.includes(i)) continue;
         const item = confirmItems[i];
@@ -87,6 +96,8 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
             throw new Error(`가격 저장 실패: ${getErrorMessage(error)}`);
           });
           succeededIndicesRef.current.push(i);
+          progressRef.current = succeededIndicesRef.current.length;
+          setProgressTick((n) => n + 1);
         } catch (error) {
           const reason =
             error instanceof Error && error.message
@@ -98,7 +109,6 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: priceKeys.all });
-      showToast('가격 등록이 완료됐어요!', 'success');
 
       const successIndices =
         succeededIndicesRef.current.length > 0
@@ -107,18 +117,19 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
       const firstSuccessItem =
         successIndices.length > 0 ? items[successIndices[0]] : items[0];
 
-      InteractionManager.runAfterInteractions(() => {
-        navigation.replace('Done', {
-          itemCount: successIndices.length,
-          storeName: storeName ?? undefined,
-          firstItemName: firstSuccessItem?.productName,
-          firstItemPrice: firstSuccessItem?.price,
-        });
-        reset();
-        succeededIndicesRef.current = [];
+      // beforeRemove 가드를 replace보다 먼저 해제 — 레이스 방지.
+      submittingRef.current = false;
+      reset();
+      succeededIndicesRef.current = [];
+      navigation.replace('Done', {
+        itemCount: successIndices.length,
+        storeName: storeName ?? undefined,
+        firstItemName: firstSuccessItem?.productName,
+        firstItemPrice: firstSuccessItem?.price,
       });
     },
     onError: (error) => {
+      submittingRef.current = false;
       // 이미 성공한 항목을 store에서 역순으로 제거하여 중복 등록 방지
       const succeeded = [...succeededIndicesRef.current].sort((a, b) => b - a);
       succeeded.forEach((idx) => removeItem(idx));
@@ -131,14 +142,15 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     },
   });
 
-  // 등록 진행 중 뒤로가기 차단 — 재마운트 후 부분 성공 항목 재등록 방지
+  // 등록 진행 중 뒤로가기 차단 — 재마운트 후 부분 성공 항목 재등록 방지.
+  // Alert 모달 대신 preventDefault + toast로 비차단 피드백 제공.
   useEffect(() => {
-    if (!isPending) return;
     return navigation.addListener('beforeRemove', (e) => {
+      if (!submittingRef.current) return;
       e.preventDefault();
-      Alert.alert('등록 중', '가격 등록이 진행 중입니다. 잠시만 기다려주세요.');
+      showToast('등록이 진행 중이에요. 잠시만 기다려주세요.', 'info');
     });
-  }, [navigation, isPending]);
+  }, [navigation, showToast]);
 
   const handleDelete = useCallback((index: number) => {
     Alert.alert('삭제', '이 항목을 삭제할까요?', [
@@ -215,6 +227,36 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     () => [styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }],
     [insets.bottom],
   );
+
+  // ─── 등록 중 전용 페이지 ───────────────────────────────────────────────────
+  if (isPending) {
+    const total = totalRef.current;
+    const done = progressRef.current;
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    // progressTick을 참조해서 ref 변경 시 리렌더 보장
+    void progressTick;
+    return (
+      <View style={styles.submittingContainer}>
+        <View style={styles.submittingBody}>
+          <View style={styles.submittingIconWrap}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+          <Text style={styles.submittingTitle}>가격 등록 중이에요</Text>
+          <Text style={styles.submittingSubtitle}>
+            {total > 0
+              ? `${total}개 중 ${done}개 완료 (${pct}%)`
+              : '잠시만 기다려 주세요'}
+          </Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${pct}%` }]} />
+          </View>
+          <Text style={styles.submittingHint}>
+            화면을 닫거나 앱을 종료하지 마세요.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={containerStyle}>
@@ -360,6 +402,58 @@ const styles = StyleSheet.create({
   },
   submitBtnText: { ...typography.headingLg, color: colors.white },
   btnDisabled: { backgroundColor: colors.gray400 },
+
+  // ─── 등록 중 전용 페이지 ─────────────────────────────────────────────────
+  submittingContainer: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  submittingBody: {
+    alignItems: 'center',
+    gap: spacing.md,
+    width: '100%',
+  },
+  submittingIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  submittingTitle: {
+    ...typography.headingXl,
+    color: colors.onBackground,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  submittingSubtitle: {
+    ...typography.body,
+    color: colors.gray600,
+    textAlign: 'center',
+  },
+  progressTrack: {
+    marginTop: spacing.md,
+    width: '80%',
+    height: 6,
+    borderRadius: spacing.radiusFull,
+    backgroundColor: colors.surfaceContainer,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
+  submittingHint: {
+    ...typography.caption,
+    color: colors.gray600,
+    marginTop: spacing.lg,
+    textAlign: 'center',
+  },
 });
 
 export default ConfirmScreen;
