@@ -1050,15 +1050,15 @@ const styles = StyleSheet.create({
     color: colors.onErrorContainer,
   },
 
-  // ─── (F) CTA Bar — FAB가 CTA 위로 돌출하는 것을 고려해 paddingBottom 여유 ─
+  // ─── (F) CTA Bar — 탭바의 둥근 상단과 이어지도록 동일한 radius 적용 ─
   ctaBar: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    backgroundColor: colors.white,
-    borderTopWidth: spacing.borderHairline,
-    borderTopColor: colors.outlineVariant,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: spacing.radiusXl,
+    borderTopRightRadius: spacing.radiusXl,
   },
   ctaPrimary: {
     flex: 1,
