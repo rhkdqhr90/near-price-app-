@@ -29,6 +29,9 @@ export interface ConfirmItem extends PriceTagDraftFields {
   unitType?: UnitType;
   quantity?: number;
   imageUri?: string;
+  imageFileName?: string;
+  imageMimeType?: string;
+  imageFileSize?: number;
   condition?: string;
   quality?: 'HIGH' | 'MID' | 'LOW';
   memo?: string;
@@ -43,6 +46,9 @@ export interface DraftFormData extends PriceTagDraftFields {
   unitType?: UnitType;
   quantity?: string;
   imageUri?: string;
+  imageFileName?: string;
+  imageMimeType?: string;
+  imageFileSize?: number;
   hasEvent?: boolean;
   eventStart?: string;
   eventEnd?: string;

@@ -5,7 +5,11 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import {
+  launchImageLibrary,
+  launchCamera,
+  type Asset,
+} from 'react-native-image-picker';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import type {
@@ -87,6 +91,7 @@ const QUALITY_OPTIONS = [
 interface FormErrors {
   productName?: string;
   price?: string;
+  image?: string;
   eventDate?: string;
   originalPrice?: string;
   bundleType?: string;
@@ -111,10 +116,61 @@ const formatDate = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
+const ALLOWED_UPLOAD_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
+const inferMimeTypeFromPath = (path: string): string | undefined => {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  }
+  if (normalized.endsWith('.png')) {
+    return 'image/png';
+  }
+  if (normalized.endsWith('.webp')) {
+    return 'image/webp';
+  }
+  if (normalized.endsWith('.heic') || normalized.endsWith('.heif')) {
+    return 'image/heic';
+  }
+  return undefined;
+};
+
+const resolveImageMeta = (
+  asset: Pick<Asset, 'uri' | 'type' | 'fileName' | 'fileSize'>,
+): {
+  uri: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+} | null => {
+  if (!asset.uri) {
+    return null;
+  }
+
+  const mimeType =
+    asset.type?.toLowerCase() ??
+    (asset.fileName ? inferMimeTypeFromPath(asset.fileName) : undefined) ??
+    inferMimeTypeFromPath(asset.uri);
+
+  return {
+    uri: asset.uri,
+    fileName: asset.fileName,
+    mimeType,
+    fileSize: asset.fileSize,
+  };
+};
+
 const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const {
     imageUri: paramImageUri,
+    imageFileName: paramImageFileName,
+    imageMimeType: paramImageMimeType,
+    imageFileSize: paramImageFileSize,
     initialName = '',
     initialPrice = '',
     editIndex,
@@ -146,6 +202,15 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const [quantity, setQuantity] = useState(initialQuantity ?? '');
   const [selectedUnit, setSelectedUnit] = useState<UnitType | undefined>(initialUnitType);
   const [imageUri, setImageUri] = useState<string | undefined>(paramImageUri);
+  const [imageFileName, setImageFileName] = useState<string | undefined>(
+    paramImageFileName,
+  );
+  const [imageMimeType, setImageMimeType] = useState<string | undefined>(
+    paramImageMimeType,
+  );
+  const [imageFileSize, setImageFileSize] = useState<number | undefined>(
+    paramImageFileSize,
+  );
   const [hasEvent, setHasEvent] = useState(initialHasEvent ?? false);
   const [eventStart, setEventStart] = useState(initialEventStart ?? '');
   const [eventEnd, setEventEnd] = useState(initialEventEnd ?? '');
@@ -235,17 +300,42 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const handlePickImage = useCallback(() => {
+    const applyPickedImage = (
+      asset: Pick<Asset, 'uri' | 'type' | 'fileName' | 'fileSize'> | undefined,
+    ) => {
+      if (!asset) {
+        return;
+      }
+      const imageMeta = resolveImageMeta(asset);
+      if (!imageMeta) {
+        Alert.alert('오류', '유효한 이미지를 선택해 주세요.');
+        return;
+      }
+
+      if (
+        imageMeta.mimeType &&
+        !(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(imageMeta.mimeType)
+      ) {
+        Alert.alert('지원하지 않는 이미지 형식', 'JPG, PNG, WEBP 형식의 사진만 등록할 수 있어요.');
+        return;
+      }
+
+      setImageUri(imageMeta.uri);
+      setImageFileName(imageMeta.fileName);
+      setImageMimeType(imageMeta.mimeType);
+      setImageFileSize(imageMeta.fileSize);
+      setErrors((prev) => ({ ...prev, image: undefined }));
+    };
+
     Alert.alert('사진 선택', '사진을 선택하는 방법을 선택해주세요.', [
       { text: '카메라', onPress: () => {
         launchCamera({ mediaType: 'photo', quality: 0.8 }, res => {
-          const uri = res.assets?.[0]?.uri;
-          if (uri) setImageUri(uri);
+          applyPickedImage(res.assets?.[0]);
         });
       }},
       { text: '갤러리', onPress: () => {
         launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, res => {
-          const uri = res.assets?.[0]?.uri;
-          if (uri) setImageUri(uri);
+          applyPickedImage(res.assets?.[0]);
         });
       }},
       { text: '취소', style: 'cancel' },
@@ -264,6 +354,19 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     const priceNum = parseInt(price, 10);
     if (!price || isNaN(priceNum) || priceNum <= 0) {
       newErrors.price = '올바른 가격을 입력해주세요.';
+      hasError = true;
+    }
+
+    if (!imageUri) {
+      newErrors.image = '가격표 사진을 추가해주세요.';
+      hasError = true;
+    }
+
+    if (
+      imageMimeType &&
+      !(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(imageMimeType)
+    ) {
+      newErrors.image = 'JPG, PNG, WEBP 형식의 사진만 등록할 수 있어요.';
       hasError = true;
     }
 
@@ -330,6 +433,9 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       unitType: selectedUnit,
       quantity: quantity ? parseInt(quantity, 10) : undefined,
       imageUri,
+      imageFileName,
+      imageMimeType,
+      imageFileSize,
       condition: hasEvent ? '이벤트중' : undefined,
       quality,
       memo: memo.trim() || undefined,
@@ -370,7 +476,8 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [
     productName, price, productId, selectedUnit, quantity,
-    imageUri, hasEvent, eventStart, eventEnd, quality, memo,
+    imageUri, imageFileName, imageMimeType, imageFileSize,
+    hasEvent, eventStart, eventEnd, quality, memo,
     priceTagType, originalPrice, bundleType, bundleQty, flatGroupName,
     memberPrice, endsAt, cardLabel, cardDiscountType, cardDiscountValue,
     cardConditionNote,
@@ -387,7 +494,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     [insets.bottom],
   );
 
-  const submitDisabled = !productName.trim() || !price;
+  const submitDisabled = !productName.trim() || !price || !imageUri;
 
   return (
     <KeyboardAvoidingView
@@ -596,7 +703,9 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* 사진 — 레퍼런스 100x100 */}
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>사진</Text>
+          <Text style={styles.fieldLabel}>
+            사진 <Text style={styles.required}>*</Text>
+          </Text>
           {imageUri ? (
             <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="사진 변경">
               <Image source={{ uri: imageUri }} style={styles.photoThumb} resizeMode="cover" accessibilityRole="image" accessibilityLabel="촬영한 가격표 사진" />
@@ -608,6 +717,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={styles.photoPlaceholderText}>사진 추가</Text>
             </TouchableOpacity>
           )}
+          {errors.image ? <Text style={styles.errorText}>{errors.image}</Text> : null}
         </View>
 
         {/* 품질 (선택) — 레퍼런스 3칩 full-width */}

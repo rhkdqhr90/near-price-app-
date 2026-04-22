@@ -55,7 +55,12 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     animateShutterPress();
     try {
       const photo = await cameraRef.current.takePhoto();
-      navigation.navigate('OcrResult', { imageUri: `file://${photo.path}` });
+      const imageUri = `file://${photo.path}`;
+      navigation.navigate('OcrResult', {
+        imageUri,
+        imageFileName: `price-${Date.now()}.jpg`,
+        imageMimeType: 'image/jpeg',
+      });
     } catch (error) {
       if (!__DEV__) {
         Sentry.captureException(error, { tags: { screen: 'CameraScreen', action: 'takePhoto' } });
@@ -70,8 +75,16 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, (response) => {
       if (response.didCancel) return;
       if (response.errorCode) { Alert.alert('오류', '이미지를 불러오는 데 실패했습니다.'); return; }
-      const uri = response.assets?.[0]?.uri;
-      if (uri) navigation.navigate('OcrResult', { imageUri: uri });
+      const asset = response.assets?.[0];
+      const uri = asset?.uri;
+      if (!uri) return;
+
+      navigation.navigate('OcrResult', {
+        imageUri: uri,
+        imageFileName: asset.fileName,
+        imageMimeType: asset.type,
+        imageFileSize: asset.fileSize,
+      });
     });
   }, [navigation]);
 

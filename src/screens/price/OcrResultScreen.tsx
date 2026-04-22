@@ -51,7 +51,7 @@ const parseOcrText = (text: string): OcrItem[] => {
 };
 
 const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { imageUri } = route.params;
+  const { imageUri, imageFileName, imageMimeType, imageFileSize } = route.params;
   const [ocrItems, setOcrItems] = useState<OcrItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -85,14 +85,22 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleSelectItem = useCallback((item: OcrItem) => {
     navigation.navigate('ItemDetail', {
       imageUri,
+      imageFileName,
+      imageMimeType,
+      imageFileSize,
       initialName: item.name,
       initialPrice: item.price,
     });
-  }, [navigation, imageUri]);
+  }, [navigation, imageUri, imageFileName, imageMimeType, imageFileSize]);
 
   const handleManualEntry = useCallback(() => {
-    navigation.navigate('ItemDetail', { imageUri });
-  }, [navigation, imageUri]);
+    navigation.navigate('ItemDetail', {
+      imageUri,
+      imageFileName,
+      imageMimeType,
+      imageFileSize,
+    });
+  }, [navigation, imageUri, imageFileName, imageMimeType, imageFileSize]);
 
   if (isLoading) return <LoadingView message="가격 정보를 읽는 중..." />;
   if (isError) return <ErrorView message="가격 정보 인식 중 오류가 발생했습니다." onRetry={handleRetry} />;

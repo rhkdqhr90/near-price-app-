@@ -23,6 +23,51 @@ import { getErrorMessage } from '../../utils/apiError';
 
 type Props = PriceRegisterScreenProps<'Confirm'>;
 
+const inferMimeTypeFromPath = (path: string): string | undefined => {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  }
+  if (normalized.endsWith('.png')) {
+    return 'image/png';
+  }
+  if (normalized.endsWith('.webp')) {
+    return 'image/webp';
+  }
+  return undefined;
+};
+
+const inferFileExtensionFromMimeType = (mimeType: string): string => {
+  if (mimeType === 'image/png') {
+    return '.png';
+  }
+  if (mimeType === 'image/webp') {
+    return '.webp';
+  }
+  return '.jpg';
+};
+
+const ensureUploadFileName = (rawFileName: string | undefined, mimeType: string): string => {
+  const baseName = rawFileName?.trim();
+  if (baseName && /\.(jpg|jpeg|png|webp)$/i.test(baseName)) {
+    return baseName;
+  }
+
+  const ext = inferFileExtensionFromMimeType(mimeType);
+  if (baseName && baseName.length > 0) {
+    return `${baseName}${ext}`;
+  }
+
+  return `price-${Date.now()}${ext}`;
+};
+
+const inferFileNameFromPath = (path: string): string | undefined => {
+  const withoutQuery = path.split('?')[0];
+  const slashIndex = withoutQuery.lastIndexOf('/');
+  const fileName = slashIndex >= 0 ? withoutQuery.slice(slashIndex + 1) : withoutQuery;
+  return fileName || undefined;
+};
+
 const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -47,14 +92,33 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
         if (succeededIndicesRef.current.includes(i)) continue;
         const item = confirmItems[i];
         try {
-          let imageUrl = '';
-          if (item.imageUri) {
-            const upload = await uploadApi
-              .uploadImage(item.imageUri, 'price.jpg', 'image/jpeg')
-              .catch((error) => {
-                throw new Error(`이미지 업로드 실패: ${getErrorMessage(error)}`);
-              });
-            imageUrl = upload.data?.url ?? '';
+          if (!item.imageUri) {
+            throw new Error('가격표 사진이 필요합니다.');
+          }
+
+          const uploadMimeType =
+            item.imageMimeType ??
+            inferMimeTypeFromPath(item.imageFileName ?? item.imageUri) ??
+            'image/jpeg';
+          const uploadFileName = ensureUploadFileName(
+            item.imageFileName ?? inferFileNameFromPath(item.imageUri),
+            uploadMimeType,
+          );
+
+          const upload = await uploadApi
+            .uploadImage(
+              item.imageUri,
+              uploadFileName,
+              uploadMimeType,
+              item.imageFileSize,
+            )
+            .catch((error) => {
+              throw new Error(`이미지 업로드 실패: ${getErrorMessage(error)}`);
+            });
+
+          const imageUrl = upload.data?.url ?? '';
+          if (!imageUrl) {
+            throw new Error('이미지 업로드 결과가 비어 있습니다.');
           }
           let productId = item.productId;
           if (!productId) {
@@ -163,6 +227,9 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
     const item = items[index];
     navigation.navigate('ItemDetail', {
       imageUri: item.imageUri,
+      imageFileName: item.imageFileName,
+      imageMimeType: item.imageMimeType,
+      imageFileSize: item.imageFileSize,
       initialName: item.productName,
       initialPrice: String(item.price),
       editIndex: index,
@@ -219,6 +286,16 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert('알림', '등록할 항목이 없습니다.');
       return;
     }
+
+    const missingImageItem = items.find((item) => !item.imageUri);
+    if (missingImageItem) {
+      Alert.alert(
+        '사진이 필요해요',
+        `${missingImageItem.productName} 항목에 가격표 사진을 추가한 뒤 다시 등록해주세요.`,
+      );
+      return;
+    }
+
     if (isPending) return;
     submitAll(items);
   }, [items, submitAll, isPending]);
@@ -226,6 +303,10 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
   const containerStyle = useMemo(
     () => [styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }],
     [insets.bottom],
+  );
+  const hasMissingImage = useMemo(
+    () => items.some((item) => !item.imageUri),
+    [items],
   );
 
   // ─── 등록 중 전용 페이지 ───────────────────────────────────────────────────
@@ -289,16 +370,25 @@ const ConfirmScreen: React.FC<Props> = ({ navigation }) => {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.submitBtn, (isPending || items.length === 0) && styles.btnDisabled]}
+          style={[
+            styles.submitBtn,
+            (isPending || items.length === 0 || hasMissingImage) && styles.btnDisabled,
+          ]}
           onPress={handleSubmit}
-          disabled={isPending || items.length === 0}
+          disabled={isPending || items.length === 0 || hasMissingImage}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={isPending ? '등록 중' : `전체 등록 ${items.length}개`}
-          accessibilityState={{ disabled: isPending || items.length === 0 }}
+          accessibilityLabel={
+            isPending ? '등록 중' : hasMissingImage ? '사진 추가 필요' : `전체 등록 ${items.length}개`
+          }
+          accessibilityState={{ disabled: isPending || items.length === 0 || hasMissingImage }}
         >
           <Text style={styles.submitBtnText}>
-            {isPending ? '등록 중...' : `전체 등록 (${items.length}개)`}
+            {isPending
+              ? '등록 중...'
+              : hasMissingImage
+                ? '사진 추가 후 등록'
+                : `전체 등록 (${items.length}개)`}
           </Text>
         </TouchableOpacity>
       </View>

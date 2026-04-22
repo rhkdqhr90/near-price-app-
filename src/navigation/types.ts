@@ -64,9 +64,17 @@ export type PriceRegisterStackParamList = {
   StoreRegister: { latitude: number; longitude: number };
   InputMethod: undefined;
   Camera: undefined;
-  OcrResult: { imageUri: string };
+  OcrResult: {
+    imageUri: string;
+    imageFileName?: string;
+    imageMimeType?: string;
+    imageFileSize?: number;
+  };
   ItemDetail: {
     imageUri?: string;
+    imageFileName?: string;
+    imageMimeType?: string;
+    imageFileSize?: number;
     initialName?: string;
     initialPrice?: string;
     editIndex?: number;

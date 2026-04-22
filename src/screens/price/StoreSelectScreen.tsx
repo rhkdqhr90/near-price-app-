@@ -22,6 +22,7 @@ import { useLocationStore } from '../../store/locationStore';
 import { usePriceRegisterStore } from '../../store/priceRegisterStore';
 import { useNearbyStores } from '../../hooks/queries/useNearbyStores';
 import { useNaverPlaceSearch, type NaverPlaceDocument } from '../../hooks/queries/useNaverPlaceSearch';
+import { useReverseGeocode } from '../../hooks/queries/useLocation';
 import { storeApi } from '../../api/store.api';
 import { isAxiosError } from '../../api/client';
 import { STALE_TIME } from '../../lib/queryClient';
@@ -53,6 +54,13 @@ const inferStoreType = (category: string): StoreType => {
   if (cat.includes('시장') || cat.includes('재래시장')) return 'traditional_market';
   if (cat.includes('슈퍼')) return 'supermarket';
   return 'mart';
+};
+
+const normalizeRegionHint = (value?: string | null): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (/^(현재\s*위치|내\s*위치)$/.test(trimmed)) return null;
+  return trimmed;
 };
 
 type Props = PriceRegisterScreenProps<'StoreSelect'>;
@@ -88,6 +96,23 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
 
   const isSearching = debouncedQuery.trim().length >= 2;
 
+  const storedRegionHint = useMemo(
+    () => normalizeRegionHint(regionName),
+    [regionName],
+  );
+  const reverseTargetLat = gpsCoords?.latitude ?? regionLat ?? null;
+  const reverseTargetLng = gpsCoords?.longitude ?? regionLng ?? null;
+  const shouldResolveRegionHint =
+    storedRegionHint === null && reverseTargetLat !== null && reverseTargetLng !== null;
+  const { data: reverseRegionHint } = useReverseGeocode(
+    shouldResolveRegionHint ? reverseTargetLng : null,
+    shouldResolveRegionHint ? reverseTargetLat : null,
+  );
+  const effectiveRegionHint = useMemo(() => {
+    const fallbackRegionHint = normalizeRegionHint(reverseRegionHint);
+    return storedRegionHint ?? fallbackRegionHint ?? undefined;
+  }, [storedRegionHint, reverseRegionHint]);
+
   // ─── 주변 매장 (쿼리 없을 때만 활성) ──────────────────────────────────────
   const {
     data: nearbyStores,
@@ -104,7 +129,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     data: naverPlaces,
     isFetching: isNaverSearching,
     isError: isNaverError,
-  } = useNaverPlaceSearch(debouncedQuery, isSearching, regionName ?? undefined);
+  } = useNaverPlaceSearch(debouncedQuery, isSearching, effectiveRegionHint);
 
   // ─── DB 매장명 검색 (검색 중일 때) ────────────────────────────────────────
   const { data: dbSearchStores } = useQuery({
