@@ -103,7 +103,7 @@ type SelectedStore =
 
 const NEARBY_RADIUS_M = 3000; // 주변 매장 기본 반경 3km
 const USER_RADIUS_M = 500;    // 지도 반경 원 표시용
-const SEARCH_RADIUS_M = NEARBY_RADIUS_M;
+const SEARCH_RADIUS_M = USER_RADIUS_M;
 
 const isWithinSearchRadius = (distanceM: number | null): boolean => {
   if (distanceM == null) return false;
@@ -654,7 +654,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
           ListEmptyComponent={
             <Text style={styles.emptyText}>
               {isSearching
-                ? '내 위치 기준 3km 내 검색 결과가 없어요. 아래 "새 매장 직접 등록" 을 이용해 주세요.'
+                ? '내 위치 기준 500m 내 검색 결과가 없어요. 아래 "새 매장 직접 등록" 을 이용해 주세요.'
                 : '주변에 등록된 매장이 없어요.'}
             </Text>
           }
