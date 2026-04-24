@@ -40,7 +40,23 @@ export const useProductPricesByName = (productName: string) => {
   });
 };
 
-export const useInfiniteRecentPrices = () => {
+export const useInfiniteRecentPrices = (filter?: {
+  latitude: number | null;
+  longitude: number | null;
+  radiusM: number | null;
+}) => {
+  const hasLocationFilter =
+    filter?.latitude != null &&
+    filter?.longitude != null &&
+    filter?.radiusM != null &&
+    Number.isFinite(filter.latitude) &&
+    Number.isFinite(filter.longitude) &&
+    Number.isFinite(filter.radiusM);
+
+  const latitude = hasLocationFilter ? filter.latitude : null;
+  const longitude = hasLocationFilter ? filter.longitude : null;
+  const radiusM = hasLocationFilter ? filter.radiusM : null;
+
   return useInfiniteQuery<
     PaginatedResponse<ProductPriceCard>,
     Error,
@@ -48,8 +64,20 @@ export const useInfiniteRecentPrices = () => {
     QueryKey,
     number
   >({
-    queryKey: priceKeys.recent,
-    queryFn: ({ pageParam }) => priceApi.getRecent(pageParam, 20).then(res => res.data),
+    queryKey: [
+      ...priceKeys.recent,
+      latitude,
+      longitude,
+      radiusM,
+    ] as const,
+    queryFn: ({ pageParam }) =>
+      priceApi
+        .getRecent(pageParam, 20, {
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
+          radiusM: radiusM ?? undefined,
+        })
+        .then(res => res.data),
     getNextPageParam: (lastPage) =>
       lastPage.data.length === lastPage.limit ? lastPage.page + 1 : undefined,
     initialPageParam: 1,

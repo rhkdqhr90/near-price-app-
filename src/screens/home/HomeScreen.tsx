@@ -71,7 +71,11 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useInfiniteRecentPrices();
+  } = useInfiniteRecentPrices({
+    latitude: userLat,
+    longitude: userLng,
+    radiusM: radius,
+  });
 
   const recentPrices = useMemo(() => {
     const all = recentData?.pages.flatMap((p) => p.data) ?? [];

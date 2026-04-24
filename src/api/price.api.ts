@@ -2,8 +2,20 @@ import { apiClient } from './client';
 import type { PriceResponse, CreatePriceDto, UpdatePriceDto, PaginatedResponse, ProductPriceCard } from '../types/api.types';
 
 export const priceApi = {
-  getRecent: (page = 1, limit = 20) =>
-    apiClient.get<PaginatedResponse<ProductPriceCard>>('/price/recent', { params: { page, limit } }),
+  getRecent: (
+    page = 1,
+    limit = 20,
+    filter?: { latitude?: number; longitude?: number; radiusM?: number },
+  ) =>
+    apiClient.get<PaginatedResponse<ProductPriceCard>>('/price/recent', {
+      params: {
+        page,
+        limit,
+        ...(filter?.latitude != null ? { latitude: filter.latitude } : {}),
+        ...(filter?.longitude != null ? { longitude: filter.longitude } : {}),
+        ...(filter?.radiusM != null ? { radiusM: filter.radiusM } : {}),
+      },
+    }),
 
   getByStore: (storeId: string, page = 1, limit = 20) =>
     apiClient.get<PaginatedResponse<PriceResponse>>(`/price/store/${storeId}`, { params: { page, limit } }),
