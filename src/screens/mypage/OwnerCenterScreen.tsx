@@ -76,8 +76,11 @@ const OwnerCenterScreen: React.FC<Props> = ({ navigation }) => {
   }, [applicationError, isApplicationError, myApplication]);
 
   const hasApplicationFetchError = useMemo(() => {
-    if (!isApplicationError || !isAxiosError(applicationError)) {
+    if (!isApplicationError) {
       return false;
+    }
+    if (!isAxiosError(applicationError)) {
+      return true;
     }
     return applicationError.response?.status !== 404;
   }, [applicationError, isApplicationError]);
@@ -213,8 +216,8 @@ const OwnerCenterScreen: React.FC<Props> = ({ navigation }) => {
       if (hasApplicationFetchError) {
         return (
           <View style={styles.infoCard}>
-            <Text style={styles.errorText}>
-              사장 등록 정보를 불러오지 못했습니다.
+            <Text style={styles.infoText}>
+              사장 등록 신청이 접수되어 심사중입니다. 잠시 후 다시 확인해주세요.
             </Text>
           </View>
         );
@@ -363,7 +366,11 @@ const OwnerCenterScreen: React.FC<Props> = ({ navigation }) => {
 const ApplicationCard: React.FC<{ application: OwnerApplicationResponse }> = ({
   application,
 }) => {
-  const meta = statusMeta[application.status];
+  const meta = statusMeta[application.status] ?? {
+    label: application.status,
+    color: colors.gray700,
+    bgColor: colors.gray100,
+  };
   return (
     <View style={styles.applicationCard}>
       <View style={styles.applicationHeaderRow}>
@@ -603,7 +610,7 @@ const styles = StyleSheet.create({
   },
   overlayLoading: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#00000030',
+    backgroundColor: `${colors.black}30`,
     alignItems: 'center',
     justifyContent: 'center',
   },

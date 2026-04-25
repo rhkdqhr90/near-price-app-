@@ -21,7 +21,12 @@ import { storeApi } from '../../api/store.api';
 import { uploadApi } from '../../api/upload.api';
 import { isAxiosError } from '../../api/client';
 import { STALE_TIME } from '../../lib/queryClient';
-import type { StoreResponse } from '../../types/api.types';
+import type {
+  CreateOwnerApplicationDto,
+  OwnerApplicationResponse,
+  UpdateOwnerApplicationDto,
+} from '../../types/api.types';
+import { useLocationStore } from '../../store/locationStore';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -53,6 +58,11 @@ const inferFileNameFromUri = (uri: string): string => {
 const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const {
+    latitude: currentLatitude,
+    longitude: currentLongitude,
+    regionName,
+  } = useLocationStore();
   const mode = route.params.mode;
   const isEditMode = mode === 'edit';
 
@@ -73,9 +83,8 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const [ownerPhone, setOwnerPhone] = useState('');
   const [businessRegistrationNumber, setBusinessRegistrationNumber] =
     useState('');
-  const [storeKeyword, setStoreKeyword] = useState('');
-  const [storeResults, setStoreResults] = useState<StoreResponse[]>([]);
-  const [selectedStore, setSelectedStore] = useState<StoreResponse | null>(null);
+  const [storeName, setStoreName] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
   const [proofImageUrl, setProofImageUrl] = useState('');
   const [proofImageLocalUri, setProofImageLocalUri] = useState<string | null>(
     null,
@@ -88,24 +97,11 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setOwnerName(existingApplication.ownerName);
     setOwnerPhone(existingApplication.ownerPhone);
-    setSelectedStore({
-      id: existingApplication.store.id,
-      name: existingApplication.store.name,
-      type: 'mart',
-      latitude: 0,
-      longitude: 0,
-      address: existingApplication.store.address,
-      externalPlaceId: null,
-      createdAt: existingApplication.createdAt,
-      updatedAt: existingApplication.updatedAt,
-    });
+    setStoreName(existingApplication.store.name);
+    setStoreAddress(existingApplication.store.address);
     setProofImageUrl(existingApplication.proofImageUrl);
     setProofImageLocalUri(existingApplication.proofImageUrl);
   }, [existingApplication]);
-
-  const { mutateAsync: searchStores, isPending: isSearchingStores } = useMutation({
-    mutationFn: (keyword: string) => storeApi.searchByName(keyword).then((res) => res.data),
-  });
 
   const { mutateAsync: uploadProofImage, isPending: isUploadingImage } =
     useMutation({
@@ -120,9 +116,10 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const { mutateAsync: submitForm, isPending: isSubmitting } = useMutation({
     mutationFn: async () => {
       const normalizedBizNo = businessRegistrationNumber.replace(/[^0-9]/g, '');
+      const normalizedStoreName = storeName.trim();
 
-      if (!selectedStore) {
-        throw new Error('매장을 선택해주세요.');
+      if (!normalizedStoreName) {
+        throw new Error('매장명을 입력해주세요.');
       }
       if (!ownerName.trim()) {
         throw new Error('사장명을 입력해주세요.');
@@ -130,28 +127,67 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
       if (!ownerPhone.trim()) {
         throw new Error('연락처를 입력해주세요.');
       }
-      if (normalizedBizNo.length !== 10) {
+      const shouldUpdateBizNo = normalizedBizNo.length > 0 || !isEditMode;
+      if (shouldUpdateBizNo && normalizedBizNo.length !== 10) {
         throw new Error('사업자등록번호 10자리를 입력해주세요.');
       }
       if (!proofImageUrl) {
         throw new Error('증빙이미지를 업로드해주세요.');
       }
 
-      const payload = {
-        storeId: selectedStore.id,
+      const normalizedStoreAddress =
+        storeAddress.trim() || regionName?.trim() || '주소 미입력';
+      const shouldReuseExistingStore =
+        isEditMode &&
+        !!existingApplication &&
+        normalizedStoreName === existingApplication.store.name &&
+        normalizedStoreAddress === existingApplication.store.address;
+
+      let resolvedStoreId: string;
+      if (shouldReuseExistingStore) {
+        resolvedStoreId = existingApplication.store.id;
+      } else {
+        if (currentLatitude == null || currentLongitude == null) {
+          throw new Error(
+            '현재 위치를 확인할 수 없어 매장 등록이 불가합니다. 위치 설정 후 다시 시도해주세요.',
+          );
+        }
+        const createdStore = await storeApi.create({
+          name: normalizedStoreName,
+          type: 'mart',
+          latitude: currentLatitude,
+          longitude: currentLongitude,
+          address: normalizedStoreAddress,
+        });
+        resolvedStoreId = createdStore.data.id;
+      }
+
+      if (isEditMode) {
+        const updatePayload: UpdateOwnerApplicationDto = {
+          storeId: resolvedStoreId,
+          ownerName: ownerName.trim(),
+          ownerPhone: ownerPhone.trim(),
+          proofImageUrl,
+        };
+        if (shouldUpdateBizNo) {
+          updatePayload.businessRegistrationNumber = normalizedBizNo;
+        }
+        return await ownerApi.updateMyApplication(updatePayload);
+      }
+
+      const createPayload: CreateOwnerApplicationDto = {
+        storeId: resolvedStoreId,
         ownerName: ownerName.trim(),
         ownerPhone: ownerPhone.trim(),
         businessRegistrationNumber: normalizedBizNo,
         proofImageUrl,
       };
-
-      if (isEditMode) {
-        return await ownerApi.updateMyApplication(payload);
-      }
-      return await ownerApi.createMyApplication(payload);
+      return await ownerApi.createMyApplication(createPayload);
     },
-    onSuccess: async () => {
+    onSuccess: async (response: { data: OwnerApplicationResponse }) => {
+      queryClient.setQueryData(['owner', 'me'], response.data);
       await queryClient.invalidateQueries({ queryKey: ['owner', 'me'] });
+      await queryClient.invalidateQueries({ queryKey: ['stores'] });
       Alert.alert(
         '완료',
         isEditMode
@@ -165,24 +201,6 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleGoBack = useCallback(() => {
     navigation.goBack();
   }, [navigation]);
-
-  const handleStoreSearch = useCallback(async () => {
-    const keyword = storeKeyword.trim();
-    if (!keyword) {
-      Alert.alert('안내', '매장명을 입력해주세요.');
-      return;
-    }
-    try {
-      const results = await searchStores(keyword);
-      setStoreResults(results);
-    } catch {
-      Alert.alert('오류', '매장 검색에 실패했습니다.');
-    }
-  }, [searchStores, storeKeyword]);
-
-  const handleSelectStore = useCallback((store: StoreResponse) => {
-    setSelectedStore(store);
-  }, []);
 
   const handlePickProofImage = useCallback(() => {
     launchImageLibrary(
@@ -218,10 +236,28 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
       await submitForm();
     } catch (error: unknown) {
       if (isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 409) {
+          await queryClient.invalidateQueries({ queryKey: ['owner', 'me'] });
+          Alert.alert('안내', '이미 사장 등록 신청이 존재합니다.', [
+            { text: '확인', onPress: () => navigation.goBack() },
+          ]);
+          return;
+        }
+
         const message =
           typeof error.response?.data?.message === 'string'
             ? error.response.data.message
             : '요청 처리에 실패했습니다.';
+
+        if (status && status >= 500) {
+          Alert.alert(
+            '오류',
+            '이미 신청이 접수되었을 수 있습니다. 사장님 센터에서 신청 상태를 확인해주세요.',
+          );
+          return;
+        }
+
         Alert.alert('오류', message);
         return;
       }
@@ -233,7 +269,7 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
 
       Alert.alert('오류', '요청 처리에 실패했습니다.');
     }
-  }, [submitForm]);
+  }, [navigation, queryClient, submitForm]);
 
   const submitDisabled = useMemo(
     () => isSubmitting || isUploadingImage,
@@ -294,56 +330,32 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
       </View>
 
       <FlatList
-        data={storeResults}
-        keyExtractor={(item) => item.id}
+        data={['owner-application-form']}
+        keyExtractor={(item) => item}
         contentContainerStyle={styles.contentContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.storeResultItem,
-              selectedStore?.id === item.id && styles.storeResultItemActive,
-            ]}
-            onPress={() => handleSelectStore(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.name} 선택`}
-          >
-            <Text style={styles.storeResultName}>{item.name}</Text>
-            <Text style={styles.storeResultAddress}>{item.address}</Text>
-          </TouchableOpacity>
-        )}
+        renderItem={() => null}
         ListHeaderComponent={
           <>
-            <Text style={styles.label}>매장 검색</Text>
-            <View style={styles.searchRow}>
-              <TextInput
-                style={styles.input}
-                value={storeKeyword}
-                onChangeText={setStoreKeyword}
-                placeholder="매장명을 입력하세요"
-                placeholderTextColor={colors.gray400}
-              />
-              <TouchableOpacity
-                style={styles.searchButton}
-                onPress={handleStoreSearch}
-                disabled={isSearchingStores}
-              >
-                {isSearchingStores ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <Text style={styles.searchButtonText}>검색</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.label}>매장명</Text>
+            <TextInput
+              style={styles.input}
+              value={storeName}
+              onChangeText={setStoreName}
+              placeholder="매장명을 입력하세요"
+              placeholderTextColor={colors.gray400}
+            />
+            <Text style={styles.helperText}>
+              검색 없이 입력한 매장명으로 바로 등록됩니다.
+            </Text>
 
-            {selectedStore ? (
-              <View style={styles.selectedStoreBox}>
-                <Text style={styles.selectedStoreTitle}>선택된 매장</Text>
-                <Text style={styles.selectedStoreName}>{selectedStore.name}</Text>
-                <Text style={styles.selectedStoreAddress}>
-                  {selectedStore.address}
-                </Text>
-              </View>
-            ) : null}
+            <Text style={styles.label}>매장 주소 (선택)</Text>
+            <TextInput
+              style={styles.input}
+              value={storeAddress}
+              onChangeText={setStoreAddress}
+              placeholder="미입력 시 현재 동네명으로 저장됩니다"
+              placeholderTextColor={colors.gray400}
+            />
 
             <Text style={styles.label}>사장명</Text>
             <TextInput
@@ -369,7 +381,11 @@ const OwnerApplicationFormScreen: React.FC<Props> = ({ navigation, route }) => {
               style={styles.input}
               value={businessRegistrationNumber}
               onChangeText={setBusinessRegistrationNumber}
-              placeholder="숫자 10자리를 입력하세요"
+              placeholder={
+                isEditMode
+                  ? '변경 시에만 숫자 10자리를 입력하세요'
+                  : '숫자 10자리를 입력하세요'
+              }
               keyboardType="number-pad"
               placeholderTextColor={colors.gray400}
             />
@@ -454,10 +470,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  searchRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
   input: {
     flex: 1,
     borderWidth: spacing.borderThin,
@@ -468,58 +480,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.black,
   },
-  searchButton: {
-    width: 72,
-    borderRadius: spacing.radiusMd,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchButtonText: {
-    ...typography.bodySm,
-    color: colors.white,
-    fontWeight: '700' as const,
-  },
-  selectedStoreBox: {
-    borderWidth: spacing.borderThin,
-    borderColor: colors.primary,
-    borderRadius: spacing.radiusMd,
-    padding: spacing.md,
-    backgroundColor: colors.primaryLight,
-    marginTop: spacing.sm,
-  },
-  selectedStoreTitle: {
-    ...typography.captionBold,
-    color: colors.primaryDark,
-    marginBottom: spacing.xs,
-  },
-  selectedStoreName: {
-    ...typography.body,
-    color: colors.black,
-    fontWeight: '700' as const,
-  },
-  selectedStoreAddress: {
-    ...typography.caption,
-    color: colors.gray600,
-    marginTop: spacing.xs,
-  },
-  storeResultItem: {
-    borderWidth: spacing.borderThin,
-    borderColor: colors.gray200,
-    borderRadius: spacing.radiusMd,
-    padding: spacing.md,
-    marginTop: spacing.xs,
-  },
-  storeResultItemActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  storeResultName: {
-    ...typography.body,
-    fontWeight: '700' as const,
-    color: colors.black,
-  },
-  storeResultAddress: {
+  helperText: {
     ...typography.caption,
     color: colors.gray600,
     marginTop: spacing.xs,

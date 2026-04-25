@@ -467,10 +467,13 @@ export interface CreateInquiryDto {
 
 // ─── Flyer ─────────────────────────────────────────────────────────────────
 
+export type FlyerTemplateType = 'classic' | 'retro' | 'news' | 'coupon';
+
 export interface FlyerProductItem {
   id: string;
   name: string;
   emoji: string;
+  imageUrl: string | null;
   originalPrice: number | null;
   salePrice: number;
   badges: Array<{ label: string; type: 'red' | 'yellow' | 'blue' }>;
@@ -505,6 +508,7 @@ export interface FlyerResponse {
   storeReviewCount: number | null;
   products: FlyerProductItem[] | null;
   reviews: FlyerReviewItem[] | null;
+  templateType: FlyerTemplateType | null;
   isActive: boolean;
   ownerApplicationId: string | null;
   createdAt: string;
@@ -541,6 +545,7 @@ export interface CreateFlyerDto {
   storeReviewCount?: number;
   products?: FlyerProductItem[];
   reviews?: FlyerReviewItem[];
+  templateType?: FlyerTemplateType;
   isActive?: boolean;
 }
 

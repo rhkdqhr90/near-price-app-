@@ -36,6 +36,59 @@ interface NaverLocalResponse {
   items: NaverLocalItem[];
 }
 
+const NAVER_SEARCH_DISPLAY = 30;
+const normalizePlaceName = (value: string): string =>
+  value.toLowerCase().replace(/[^0-9a-zA-Z가-힣]/g, '');
+const decodeHtmlEntities = (raw: string): string =>
+  raw.replace(/&(amp|lt|gt|quot|#39);/g, (match, code: string) => {
+    const entities: Record<string, string> = {
+      amp: '&',
+      lt: '<',
+      gt: '>',
+      quot: '"',
+      '#39': "'",
+    };
+    return entities[code] ?? match;
+  });
+
+const toPlaceDocuments = (items: NaverLocalItem[]): NaverPlaceDocument[] =>
+  items
+    .map((item) => {
+      if (!item.title || !item.mapx || !item.mapy) return null;
+      // Naver Search API mapx/mapy는 소수점 없는 정수 (경도/위도 × 1e7)
+      const lngInt = parseInt(item.mapx, 10);
+      const latInt = parseInt(item.mapy, 10);
+      // 좌표 파싱 실패(빈 문자열 등) 시 해당 결과 제외
+      if (isNaN(lngInt) || isNaN(latInt)) return null;
+      const lng = (lngInt / 1e7).toFixed(7);
+      const lat = (latInt / 1e7).toFixed(7);
+      const name = decodeHtmlEntities(item.title.replace(/<[^>]*>/g, ''));
+      // Naver Search API는 고유 ID를 제공하지 않으므로 이름 + 좌표로 결과 내 유일성 보장
+      return {
+        id: `naver_${name}_${lng}_${lat}`,
+        name,
+        category: item.category,
+        address: item.address,
+        roadAddress: item.roadAddress,
+        x: lng,
+        y: lat,
+      };
+    })
+    .filter((item): item is NaverPlaceDocument => item !== null);
+
+const requestSearchKeyword = async (query: string): Promise<NaverPlaceDocument[]> => {
+  const res = await apiClient.get<NaverLocalResponse>('/naver/search', {
+    params: { query, display: NAVER_SEARCH_DISPLAY, sort: 'comment' },
+  });
+  return toPlaceDocuments(res.data.items ?? []);
+};
+
+const buildPlaceDedupKey = (item: NaverPlaceDocument): string => {
+  const roundedLat = Number.parseFloat(item.y).toFixed(6);
+  const roundedLng = Number.parseFloat(item.x).toFixed(6);
+  return `${normalizePlaceName(item.name)}_${roundedLat}_${roundedLng}`;
+};
+
 export const naverLocalApi = {
   // 역지오코딩: 좌표 → 동 이름 변환
   // 1순위: Naver Reverse Geocoding (NCP Maps API)
@@ -73,36 +126,43 @@ export const naverLocalApi = {
   },
 
   searchKeyword: async (query: string, regionHint?: string): Promise<NaverPlaceDocument[]> => {
-    // regionHint가 있으면 검색어에 동네 이름 추가 (위치 기반 검색 효과)
-    const searchQuery = regionHint ? `${regionHint} ${query}` : query;
-    const res = await apiClient.get<NaverLocalResponse>('/naver/search', {
-      params: { query: searchQuery, display: 10, sort: 'comment' },
+    const plainQuery = query.trim();
+    if (plainQuery.length === 0) {
+      return [];
+    }
+
+    const normalizedRegionHint = regionHint?.trim();
+    const hintedQuery = normalizedRegionHint
+      ? `${normalizedRegionHint} ${plainQuery}`
+      : null;
+
+    const requests = hintedQuery
+      ? [requestSearchKeyword(hintedQuery), requestSearchKeyword(plainQuery)]
+      : [requestSearchKeyword(plainQuery)];
+
+    const results = await Promise.allSettled(requests);
+    const successful = results
+      .filter(
+        (result): result is PromiseFulfilledResult<NaverPlaceDocument[]> =>
+          result.status === 'fulfilled',
+      )
+      .map((result) => result.value);
+
+    if (successful.length === 0) {
+      const firstRejected = results.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      throw firstRejected?.reason ?? new Error('Failed to search naver places');
+    }
+
+    const merged = new Map<string, NaverPlaceDocument>();
+    successful.flat().forEach((item) => {
+      const dedupKey = buildPlaceDedupKey(item);
+      if (!merged.has(dedupKey)) {
+        merged.set(dedupKey, item);
+      }
     });
-    return (res.data.items ?? [])
-      .map((item) => {
-        if (!item.title || !item.mapx || !item.mapy) return null;
-        // Naver Search API mapx/mapy는 소수점 없는 정수 (경도/위도 × 1e7)
-        const lngInt = parseInt(item.mapx, 10);
-        const latInt = parseInt(item.mapy, 10);
-        // 좌표 파싱 실패(빈 문자열 등) 시 해당 결과 제외
-        if (isNaN(lngInt) || isNaN(latInt)) return null;
-        const lng = (lngInt / 1e7).toFixed(7);
-        const lat = (latInt / 1e7).toFixed(7);
-        const name = item.title.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (match, code: string) => {
-          const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
-          return entities[code] ?? match;
-        });
-        // Naver Search API는 고유 ID를 제공하지 않으므로 이름 + 좌표로 결과 내 유일성 보장
-        return {
-          id: `naver_${name}_${lng}_${lat}`,
-          name,
-          category: item.category,
-          address: item.address,
-          roadAddress: item.roadAddress,
-          x: lng,
-          y: lat,
-        };
-      })
-      .filter((item): item is NaverPlaceDocument => item !== null);
+
+    return [...merged.values()];
   },
 };

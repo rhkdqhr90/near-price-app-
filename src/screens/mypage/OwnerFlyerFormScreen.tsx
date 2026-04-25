@@ -17,10 +17,18 @@ import type { MyPageScreenProps } from '../../navigation/types';
 import { flyerApi } from '../../api/flyer.api';
 import { ownerApi } from '../../api/owner.api';
 import { STALE_TIME } from '../../lib/queryClient';
+import type { FlyerTemplateType } from '../../types/api.types';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import ChevronLeftIcon from '../../components/icons/ChevronLeftIcon';
+
+const TEMPLATES: Array<{ key: FlyerTemplateType; label: string; emoji: string; desc: string }> = [
+  { key: 'classic', label: '클래식', emoji: '🎯', desc: '모던하고 깔끔한 기본 스타일' },
+  { key: 'retro', label: '레트로', emoji: '🛒', desc: '실물 마트 전단지 느낌' },
+  { key: 'news', label: '신문', emoji: '🗞️', desc: '동네가격일보 — 신문 지면 스타일' },
+  { key: 'coupon', label: '쿠폰북', emoji: '✂️', desc: '오려쓰는 쿠폰북 스타일' },
+];
 
 type Props = MyPageScreenProps<'OwnerFlyerForm'>;
 
@@ -52,6 +60,7 @@ const OwnerFlyerFormScreen: React.FC<Props> = ({ navigation, route }) => {
     [editingFlyerId, myFlyers],
   );
 
+  const [templateType, setTemplateType] = useState<FlyerTemplateType>('classic');
   const [promotionTitle, setPromotionTitle] = useState('');
   const [badge, setBadge] = useState('특가');
   const [badgeColor, setBadgeColor] = useState('#2E7D32');
@@ -64,6 +73,7 @@ const OwnerFlyerFormScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!editingFlyer) {
       return;
     }
+    setTemplateType(editingFlyer.templateType ?? 'classic');
     setPromotionTitle(editingFlyer.promotionTitle);
     setBadge(editingFlyer.badge);
     setBadgeColor(editingFlyer.badgeColor);
@@ -97,6 +107,7 @@ const OwnerFlyerFormScreen: React.FC<Props> = ({ navigation, route }) => {
       const payload = {
         storeName: myApplication.store.name,
         storeAddress: myApplication.store.address,
+        templateType,
         promotionTitle: promotionTitle.trim(),
         badge: badge.trim(),
         badgeColor: badgeColor.trim(),
@@ -187,6 +198,32 @@ const OwnerFlyerFormScreen: React.FC<Props> = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
       >
         <InfoField label="매장" value={myApplication?.store.name ?? '-'} />
+
+        {/* 템플릿 선택 */}
+        <Text style={styles.label}>전단지 디자인 *</Text>
+        <Text style={styles.templateHint}>원하는 스타일을 선택하면 자동으로 디자인됩니다</Text>
+        <View style={styles.templateGrid}>
+          {TEMPLATES.map((t) => {
+            const active = templateType === t.key;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                style={[styles.templateCard, active && styles.templateCardActive]}
+                onPress={() => setTemplateType(t.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`${t.label} 템플릿 선택`}
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={styles.templateEmoji}>{t.emoji}</Text>
+                <Text style={[styles.templateLabel, active && styles.templateLabelActive]}>
+                  {t.label}
+                </Text>
+                <Text style={styles.templateDesc} numberOfLines={2}>{t.desc}</Text>
+                {active && <View style={styles.templateCheck}><Text style={styles.templateCheckText}>✓</Text></View>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={styles.label}>전단지 제목 *</Text>
         <TextInput
@@ -359,6 +396,66 @@ const styles = StyleSheet.create({
   },
   multilineInput: {
     minHeight: 120,
+  },
+  templateHint: {
+    ...typography.caption,
+    color: colors.gray600,
+    marginBottom: spacing.md,
+  },
+  templateGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  templateCard: {
+    width: '47.5%',
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
+    borderRadius: spacing.radiusMd,
+    padding: spacing.md,
+    backgroundColor: colors.white,
+    position: 'relative',
+    minHeight: 100,
+  },
+  templateCardActive: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    backgroundColor: colors.primaryLight,
+  },
+  templateEmoji: {
+    fontSize: 26,
+    marginBottom: spacing.xs,
+  },
+  templateLabel: {
+    ...typography.bodySm,
+    fontWeight: '700' as const,
+    color: colors.black,
+    marginBottom: 2,
+  },
+  templateLabelActive: {
+    color: colors.primary,
+  },
+  templateDesc: {
+    ...typography.caption,
+    color: colors.gray600,
+    lineHeight: 16,
+  },
+  templateCheck: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateCheckText: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: colors.white,
   },
   submitButton: {
     marginTop: spacing.xl,
