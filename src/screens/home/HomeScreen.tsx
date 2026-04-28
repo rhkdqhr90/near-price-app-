@@ -431,7 +431,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
         renderItem={renderCard}
         contentContainerStyle={listContentStyle}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
         onEndReached={() => {
           if (hasNextPage && !isFetchingNextPage) fetchNextPage();
         }}

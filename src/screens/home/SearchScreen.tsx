@@ -2,7 +2,6 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
-  Image,
   TextInput,
   TouchableOpacity,
   Pressable,
@@ -25,6 +24,7 @@ import { useAddWishlist } from '../../hooks/queries/useWishlist';
 import { useLocationStore } from '../../store/locationStore';
 import EmptyState from '../../components/common/EmptyState';
 import LoadingView from '../../components/common/LoadingView';
+import ResilientImage from '../../components/common/ResilientImage';
 import SearchIcon from '../../components/icons/SearchIcon';
 import WifiOffIcon from '../../components/icons/WifiOffIcon';
 import MapPinIcon from '../../components/icons/MapPinIcon';
@@ -225,10 +225,12 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
           {/* 썸네일 */}
           <View style={styles.listThumbWrap}>
             {imageUri ? (
-              <Image
-                source={{ uri: imageUri }}
+              <ResilientImage
+                uri={imageUri}
                 style={styles.listThumb}
                 resizeMode="cover"
+                maxRetries={1}
+                retryDelayMs={120}
                 accessibilityLabel={`${item.productName} 상품 이미지`}
               />
             ) : (
@@ -469,7 +471,6 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
           renderItem={renderProductCard}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
-          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl
               refreshing={isProductRefetching}

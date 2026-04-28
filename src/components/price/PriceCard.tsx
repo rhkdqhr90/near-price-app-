@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import { PJS, typography } from '../../theme/typography';
 import { fixImageUrl, formatPrice, formatRelativeTime } from '../../utils/format';
 import type { ProductPriceCard } from '../../types/api.types';
 import { PriceTag } from './PriceTag';
+import ResilientImage from '../common/ResilientImage';
 
 interface PriceCardProps {
   item: ProductPriceCard;
@@ -64,10 +64,12 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
     >
       <View style={styles.row}>
         {imageUri && !imageLoadFailed ? (
-          <Image
-            source={{ uri: imageUri }}
+          <ResilientImage
+            uri={imageUri}
             style={styles.image}
-            onError={() => setImageLoadFailed(true)}
+            maxRetries={1}
+            retryDelayMs={120}
+            onPermanentError={() => setImageLoadFailed(true)}
           />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
