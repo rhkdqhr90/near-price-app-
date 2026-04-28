@@ -101,10 +101,18 @@ jobs:
               exit 1
             fi
             EFFECTIVE_API_BASE_URL="${API_BASE_URL}"
+            if [[ "${EFFECTIVE_API_BASE_URL}" != *"://"* ]]; then
+              echo "[WARN] API_BASE_URL has no scheme. Prefixing with https://"
+              EFFECTIVE_API_BASE_URL="https://${EFFECTIVE_API_BASE_URL}"
+            fi
             if [[ "${API_BASE_URL}" == "https://api.nearprice.kr" ]] || [[ "${API_BASE_URL}" == "https://api.near-price.kr" ]]; then
               echo "[WARN] deprecated API_BASE_URL detected (${API_BASE_URL})"
               echo "[WARN] fallback to https://api.bipanlife.com for this build"
               EFFECTIVE_API_BASE_URL="https://api.bipanlife.com"
+            fi
+            if [[ "${EFFECTIVE_API_BASE_URL}" == http://* ]]; then
+              echo "[WARN] API_BASE_URL uses http://. Upgrading to https:// for prod build"
+              EFFECTIVE_API_BASE_URL="https://${EFFECTIVE_API_BASE_URL#http://}"
             fi
             if [[ "${EFFECTIVE_API_BASE_URL}" != https://* ]]; then
               echo "[ERROR] production API_BASE_URL must start with https://"
