@@ -83,9 +83,9 @@ jobs:
 
       - name: 환경 변수 파일 생성
         env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
-          KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY }}
-          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL || secrets.PROD_API_BASE_URL }}
+          KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY || secrets.PROD_KAKAO_APP_KEY }}
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID || secrets.PROD_NAVER_MAP_CLIENT_ID }}
           LOCAL_API_BASE_URL: ${{ secrets.LOCAL_API_BASE_URL }}
           LOCAL_KAKAO_APP_KEY: ${{ secrets.LOCAL_KAKAO_APP_KEY }}
           LOCAL_NAVER_MAP_CLIENT_ID: ${{ secrets.LOCAL_NAVER_MAP_CLIENT_ID }}
