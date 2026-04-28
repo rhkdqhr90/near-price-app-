@@ -83,9 +83,9 @@ jobs:
 
       - name: 환경 변수 파일 생성
         env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL || secrets.PROD_API_BASE_URL }}
-          KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY || secrets.PROD_KAKAO_APP_KEY }}
-          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID || secrets.PROD_NAVER_MAP_CLIENT_ID }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY }}
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
           LOCAL_API_BASE_URL: ${{ secrets.LOCAL_API_BASE_URL }}
           LOCAL_KAKAO_APP_KEY: ${{ secrets.LOCAL_KAKAO_APP_KEY }}
           LOCAL_NAVER_MAP_CLIENT_ID: ${{ secrets.LOCAL_NAVER_MAP_CLIENT_ID }}
@@ -100,15 +100,19 @@ jobs:
               echo "[ERROR] required production secret missing: API_BASE_URL"
               exit 1
             fi
-            EFFECTIVE_API_BASE_URL="${API_BASE_URL}"
+
+            # API_BASE_URL 단일 시크릿만 사용하고, 입력값 포맷(공백/따옴표/CR)을 정규화
+            EFFECTIVE_API_BASE_URL="${API_BASE_URL//$'\r'/}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL#\"}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL%\"}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL#\'}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL%\'}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL#${EFFECTIVE_API_BASE_URL%%[![:space:]]*}}"
+            EFFECTIVE_API_BASE_URL="${EFFECTIVE_API_BASE_URL%${EFFECTIVE_API_BASE_URL##*[![:space:]]}}"
+
             if [[ "${EFFECTIVE_API_BASE_URL}" != *"://"* ]]; then
               echo "[WARN] API_BASE_URL has no scheme. Prefixing with https://"
               EFFECTIVE_API_BASE_URL="https://${EFFECTIVE_API_BASE_URL}"
-            fi
-            if [[ "${API_BASE_URL}" == "https://api.nearprice.kr" ]] || [[ "${API_BASE_URL}" == "https://api.near-price.kr" ]]; then
-              echo "[WARN] deprecated API_BASE_URL detected (${API_BASE_URL})"
-              echo "[WARN] fallback to https://api.bipanlife.com for this build"
-              EFFECTIVE_API_BASE_URL="https://api.bipanlife.com"
             fi
             if [[ "${EFFECTIVE_API_BASE_URL}" == http://* ]]; then
               echo "[WARN] API_BASE_URL uses http://. Upgrading to https:// for prod build"
