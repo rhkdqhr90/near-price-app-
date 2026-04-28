@@ -100,6 +100,20 @@ jobs:
               echo "[ERROR] required production secret missing: API_BASE_URL"
               exit 1
             fi
+            EFFECTIVE_API_BASE_URL="${API_BASE_URL}"
+            if [[ "${API_BASE_URL}" == "https://api.nearprice.kr" ]] || [[ "${API_BASE_URL}" == "https://api.near-price.kr" ]]; then
+              echo "[WARN] deprecated API_BASE_URL detected (${API_BASE_URL})"
+              echo "[WARN] fallback to https://api.bipanlife.com for this build"
+              EFFECTIVE_API_BASE_URL="https://api.bipanlife.com"
+            fi
+            if [[ "${EFFECTIVE_API_BASE_URL}" != https://* ]]; then
+              echo "[ERROR] production API_BASE_URL must start with https://"
+              exit 1
+            fi
+            if ! curl -fsS --retry 3 --retry-all-errors --connect-timeout 5 --max-time 10 "${EFFECTIVE_API_BASE_URL}/health" > /dev/null; then
+              echo "[ERROR] cannot reach ${EFFECTIVE_API_BASE_URL}/health"
+              exit 1
+            fi
             if [ -z "${KAKAO_APP_KEY:-}" ]; then
               echo "[ERROR] required production secret missing: KAKAO_APP_KEY"
               exit 1
@@ -110,7 +124,7 @@ jobs:
             fi
 
             {
-              echo "API_BASE_URL=${API_BASE_URL}"
+              echo "API_BASE_URL=${EFFECTIVE_API_BASE_URL}"
               echo "KAKAO_APP_KEY=${KAKAO_APP_KEY}"
               echo "NAVER_MAP_CLIENT_ID=${NAVER_MAP_CLIENT_ID}"
             } > "$ENV_FILE"
