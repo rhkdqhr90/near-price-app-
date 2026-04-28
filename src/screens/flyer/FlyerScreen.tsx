@@ -227,7 +227,6 @@ const FlyerScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.headerWrap}>
           <View style={styles.headerTopRow}>
             <View>
-              <Text style={[styles.headerEyebrow, { color: palette.text }]}>━━━ NEIGHBORHOOD FLYERS</Text>
               <Text style={[styles.headerTitle, { color: palette.text }]}>동네 전단지</Text>
               <Text style={[styles.headerTemplate, { color: palette.text }]}>사장님센터 템플릿 적용</Text>
             </View>
@@ -366,11 +365,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-  },
-  headerEyebrow: {
-    fontSize: 10,
-    fontWeight: '800' as const,
-    letterSpacing: 2,
   },
   headerTitle: {
     marginTop: spacing.xs,
