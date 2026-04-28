@@ -188,6 +188,8 @@ const resolveImageMeta = (
 
 const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  // 딥링크/타입 드리프트 시 route.params가 undefined여도 destructure에서 크래시하지 않도록 방어.
+  const params = route.params ?? {};
   const {
     imageUri: paramImageUri,
     imageFileName: paramImageFileName,
@@ -215,7 +217,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     initialCardDiscountType,
     initialCardDiscountValue,
     initialCardConditionNote,
-  } = route.params;
+  } = params;
 
   const { storeName, addItem, updateItem, items } = usePriceRegisterStore();
 

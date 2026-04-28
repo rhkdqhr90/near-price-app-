@@ -65,6 +65,16 @@ jobs:
 
           PKG_VERSION=$(node -p "require('./package.json').version")
           VERSION_CODE=$(( ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))
+
+          if [ -z "${PKG_VERSION:-}" ]; then
+            echo "[ERROR] versionName could not be resolved from package.json"
+            exit 1
+          fi
+          if [ -z "${VERSION_CODE:-}" ] || [ "$VERSION_CODE" -le 1 ]; then
+            echo "[ERROR] invalid VERSION_CODE: ${VERSION_CODE:-empty}"
+            exit 1
+          fi
+
           echo "target=${TARGET}" >> "$GITHUB_OUTPUT"
           echo "version_name=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
           echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
@@ -86,6 +96,7 @@ jobs:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           KAKAO_APP_KEY: ${{ secrets.KAKAO_APP_KEY }}
           NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           LOCAL_API_BASE_URL: ${{ secrets.LOCAL_API_BASE_URL }}
           LOCAL_KAKAO_APP_KEY: ${{ secrets.LOCAL_KAKAO_APP_KEY }}
           LOCAL_NAVER_MAP_CLIENT_ID: ${{ secrets.LOCAL_NAVER_MAP_CLIENT_ID }}
@@ -134,17 +145,23 @@ jobs:
               echo "[ERROR] required production secret missing: NAVER_MAP_CLIENT_ID"
               exit 1
             fi
+            if [ -z "${SENTRY_DSN:-}" ]; then
+              echo "[ERROR] required production secret missing: SENTRY_DSN"
+              exit 1
+            fi
 
             {
               echo "API_BASE_URL=${EFFECTIVE_API_BASE_URL}"
               echo "KAKAO_APP_KEY=${KAKAO_APP_KEY}"
               echo "NAVER_MAP_CLIENT_ID=${NAVER_MAP_CLIENT_ID}"
+              echo "SENTRY_DSN=${SENTRY_DSN}"
             } > "$ENV_FILE"
           else
             {
               echo "API_BASE_URL=${LOCAL_API_BASE_URL:-http://10.0.2.2:3000}"
               echo "KAKAO_APP_KEY=${LOCAL_KAKAO_APP_KEY:-KAKAO_APP_KEY_NOT_SET}"
               echo "NAVER_MAP_CLIENT_ID=${LOCAL_NAVER_MAP_CLIENT_ID:-NAVER_MAP_CLIENT_ID_NOT_SET}"
+              echo "SENTRY_DSN="
             } > "$ENV_FILE"
           fi
 
@@ -201,6 +218,13 @@ jobs:
           TARGET="${{ steps.build_config.outputs.target }}"
           ENV_FILE="${{ steps.build_config.outputs.env_file }}"
           TASK="${{ steps.build_config.outputs.gradle_task }}"
+          VERSION_CODE="${{ steps.build_config.outputs.version_code }}"
+          VERSION_NAME="${{ steps.build_config.outputs.version_name }}"
+
+          if [ -z "${VERSION_CODE}" ] || [ -z "${VERSION_NAME}" ]; then
+            echo "[ERROR] VERSION_CODE or VERSION_NAME output missing"
+            exit 1
+          fi
 
           if [ "$TARGET" = "prod_release" ]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
@@ -213,8 +237,8 @@ jobs:
 
           cd android
           ENVFILE="../${ENV_FILE}" ./gradlew clean "$TASK" --no-daemon --stacktrace \
-            -PVERSION_CODE=${{ steps.build_config.outputs.version_code }} \
-            -PVERSION_NAME=${{ steps.build_config.outputs.version_name }}
+            -PVERSION_CODE=${VERSION_CODE} \
+            -PVERSION_NAME=${VERSION_NAME}
 
       - name: 빌드 산출물 확인
         run: |

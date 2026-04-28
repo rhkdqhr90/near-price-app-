@@ -101,14 +101,9 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // 403 = 토큰 폐기/계정 정지 → 즉시 로그아웃 (재시도 없음).
-    // 백엔드의 AdminGuard 엔드포인트(관리자 쓰기 API)는 일반 앱 플로우에서 호출하지 않는다.
-    // 만약 향후 일반 유저가 도달 가능한 403 응답이 생기면 body.code로 분기 필요.
-    if (error.response?.status === 403) {
-      const { logout } = useAuthStore.getState();
-      queryClient.clear();
-      logout();
-    }
+    // 403은 단기 정책으로 강제 로그아웃하지 않는다.
+    // (서버가 403 코드를 세분화하기 전까지는 일반 권한 거부와 토큰 폐기를 구분할 수 없음)
+    // 인증 만료/무효는 401 + refresh 실패 경로에서만 로그아웃 처리한다.
 
     return Promise.reject(error);
   },

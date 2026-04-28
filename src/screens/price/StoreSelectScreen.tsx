@@ -220,6 +220,24 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     staleTime: STALE_TIME.medium,
   });
 
+  const requestLocationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const already = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    );
+    if (already) return true;
+    const result = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      {
+        title: '위치 권한',
+        message: '주변 매장을 자동으로 표시하려면 위치 권한이 필요합니다',
+        buttonPositive: '허용',
+        buttonNegative: '건너뜀',
+      },
+    );
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  }, []);
+
   // ─── 포커스 재진입 시 선택/쿼리 리셋 + GPS 재요청 ─────────────────────────
   const focusCountRef = useRef(0);
   useFocusEffect(
@@ -230,36 +248,57 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       // 첫 마운트는 useEffect에서 처리, 재진입 시에만 GPS 재요청
       if (focusCountRef.current > 0) {
         setGpsStatus('pending');
-        Geolocation.getCurrentPosition(
-          pos => {
-            const coords: GpsCoords = {
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-            };
-            setGpsCoords(coords);
-            setGpsStatus('success');
-            mapRef.current?.animateCameraTo({
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-              zoom: 16,
-            });
-          },
-          () => {
+        requestLocationPermission()
+          .then((hasPermission) => {
+            if (!hasPermission) {
+              setGpsCoords(null);
+              setGpsStatus('failed');
+              setInlineError('위치 권한이 꺼져 있어 현재 위치를 확인하지 못했어요. 권한을 허용해 주세요.');
+              if (initialRegionLat.current != null && initialRegionLng.current != null) {
+                mapRef.current?.animateCameraTo({
+                  latitude: initialRegionLat.current,
+                  longitude: initialRegionLng.current,
+                  zoom: 15,
+                });
+              }
+              return;
+            }
+
+            Geolocation.getCurrentPosition(
+              pos => {
+                const coords: GpsCoords = {
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                };
+                setGpsCoords(coords);
+                setGpsStatus('success');
+                mapRef.current?.animateCameraTo({
+                  latitude: coords.latitude,
+                  longitude: coords.longitude,
+                  zoom: 16,
+                });
+              },
+              () => {
+                setGpsCoords(null);
+                setGpsStatus('failed');
+                if (initialRegionLat.current != null && initialRegionLng.current != null) {
+                  mapRef.current?.animateCameraTo({
+                    latitude: initialRegionLat.current,
+                    longitude: initialRegionLng.current,
+                    zoom: 15,
+                  });
+                }
+              },
+              { enableHighAccuracy: true, timeout: 20000, maximumAge: 0, forceRequestLocation: true },
+            );
+          })
+          .catch(() => {
             setGpsCoords(null);
             setGpsStatus('failed');
-            if (initialRegionLat.current != null && initialRegionLng.current != null) {
-              mapRef.current?.animateCameraTo({
-                latitude: initialRegionLat.current,
-                longitude: initialRegionLng.current,
-                zoom: 15,
-              });
-            }
-          },
-          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0, forceRequestLocation: true },
-        );
+          });
       }
       focusCountRef.current += 1;
-    }, []),
+    }, [requestLocationPermission]),
   );
 
   // ─── GPS 마운트 1회 실행 ────────────────────────────────────────────────
@@ -267,26 +306,8 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     const fallbackLat = initialRegionLat.current;
     const fallbackLng = initialRegionLng.current;
 
-    const requestPermission = async (): Promise<boolean> => {
-      if (Platform.OS !== 'android') return true;
-      const already = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-      if (already) return true;
-      const result = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: '위치 권한',
-          message: '주변 매장을 자동으로 표시하려면 위치 권한이 필요합니다',
-          buttonPositive: '허용',
-          buttonNegative: '건너뜀',
-        },
-      );
-      return result === PermissionsAndroid.RESULTS.GRANTED;
-    };
-
     const run = async () => {
-      const hasPermission = await requestPermission();
+      const hasPermission = await requestLocationPermission();
       if (!hasPermission) {
         setGpsStatus('failed');
         if (fallbackLat != null && fallbackLng != null) {
@@ -331,7 +352,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     };
 
     run().catch(() => undefined);
-  }, []);
+  }, [requestLocationPermission]);
 
   // ─── 지도 중심 ────────────────────────────────────────────────────────────
   const mapCenter = useMemo(

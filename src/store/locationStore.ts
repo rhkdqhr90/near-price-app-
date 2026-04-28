@@ -3,6 +3,7 @@ import { storage, STORAGE_KEYS } from '../utils/storage';
 
 export const RADIUS_OPTIONS = [1000, 3000, 5000, 10000] as const;
 export type RadiusOption = (typeof RADIUS_OPTIONS)[number];
+const DEFAULT_RADIUS: RadiusOption = 3000;
 
 interface LocationState {
   latitude: number | null;
@@ -28,7 +29,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   latitude: null,
   longitude: null,
   regionName: null,
-  radius: 10000,
+  radius: DEFAULT_RADIUS,
 
   setLocation: (latitude, longitude, regionName) => {
     set({ latitude, longitude, regionName: regionName ?? null });
@@ -62,7 +63,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   },
 
   clearLocation: () => {
-    set({ latitude: null, longitude: null, regionName: null, radius: 10000 });
+    set({ latitude: null, longitude: null, regionName: null, radius: DEFAULT_RADIUS });
     storage.remove(STORAGE_KEYS.LOCATION).catch(noop);
   },
 
@@ -72,7 +73,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       // 이전에 저장된 radius가 현재 옵션에 없으면 기본값 사용
       const validRadius = RADIUS_OPTIONS.includes(saved.radius as RadiusOption)
         ? (saved.radius as RadiusOption)
-        : 10000;
+        : DEFAULT_RADIUS;
       set({
         latitude: saved.latitude,
         longitude: saved.longitude,

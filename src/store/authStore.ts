@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import * as Sentry from '@sentry/react-native';
 import { storage, secureTokenStorage, STORAGE_KEYS } from '../utils/storage';
 import { refreshTokens, authApi } from '../api/auth.api';
 import type { AuthTokens } from '../types/api.types';
@@ -94,9 +95,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           await secureTokenStorage.saveTokens(legacyAccess, legacyRefresh);
           await storage.remove('@nearprice/access_token');
           await storage.remove('@nearprice/refresh_token');
-        } catch {
-          // Keychain 저장 실패 시: 레거시 토큰을 메모리에만 유지하고 계속 진행
-          // 다음 로그인 시 Keychain 재시도
+        } catch (migrationError) {
+          // Keychain 저장 실패 시에는 레거시 토큰을 유지해 다음 실행에서 마이그레이션을 재시도한다.
+          // (사용자 세션 회복력 우선: 디바이스 보안 모듈 일시 오류로 인한 강제 로그아웃 방지)
+          if (!__DEV__) {
+            Sentry.captureException(migrationError, {
+              tags: { store: 'authStore', action: 'migrateTokensToKeychain' },
+            });
+          }
         }
         accessToken = legacyAccess;
         refreshToken = legacyRefresh;

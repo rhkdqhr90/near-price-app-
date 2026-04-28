@@ -4,6 +4,7 @@ import { Camera, useCameraDevice, useCameraPermission } from 'react-native-visio
 import { launchImageLibrary } from 'react-native-image-picker';
 import ImageEditor from '@react-native-community/image-editor';
 import * as Sentry from '@sentry/react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import { colors } from '../../theme/colors';
@@ -36,6 +37,9 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
   const cameraRef = useRef<Camera>(null);
   const device = useCameraDevice('back');
   const { hasPermission, requestPermission } = useCameraPermission();
+  // 화면 포커스가 빠지면 카메라 세션을 정지해 배터리/메모리 점유를 줄인다.
+  // 다른 화면 이동 후 돌아오면 자동 재활성화.
+  const isFocused = useIsFocused();
   const shutterScaleRef = useRef(new Animated.Value(1)).current;
   const isCapturingRef = useRef(false);
   // 가이드 프레임이 그려지는 컨테이너의 실제 렌더 크기.
@@ -211,7 +215,14 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container} onLayout={handleContainerLayout}>
-      <Camera ref={cameraRef} style={styles.camera} device={device} isActive photo />
+      <Camera
+        ref={cameraRef}
+        style={styles.camera}
+        device={device}
+        isActive={isFocused}
+        photo
+        video={false}
+      />
 
       {/* 카메라 가이드 오버레이 */}
       <View style={styles.guideFocusOverlay}>

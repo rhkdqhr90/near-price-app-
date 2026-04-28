@@ -2,12 +2,12 @@ import Config from 'react-native-config';
 
 const normalizeEnv = (value?: string): string => value?.replace(/^"|"$/g, '').trim() ?? '';
 
+// 폐기된 운영 도메인. 잘못된 빌드를 조용히 폴백시키지 않고 fail-fast로 즉시 빌드 오류를 드러낸다.
+// (정식 출시 후엔 잘못된 환경 설정을 숨기는 폴백이 더 위험)
 const DEPRECATED_API_HOSTS = new Set([
   'api.nearprice.kr',
   'api.near-price.kr',
 ]);
-
-const FALLBACK_PROD_API_BASE_URL = 'https://api.bipanlife.com';
 
 const resolveApiBaseUrl = (): string => {
   const raw = normalizeEnv(Config.API_BASE_URL);
@@ -22,9 +22,10 @@ const resolveApiBaseUrl = (): string => {
     throw new Error('API_BASE_URL is invalid. Expected absolute URL.');
   }
 
-  // 과거/폐기 도메인으로 빌드된 앱에서 API 완전 불통이 발생해 운영 도메인으로 강제 폴백.
   if (DEPRECATED_API_HOSTS.has(parsed.host)) {
-    return FALLBACK_PROD_API_BASE_URL;
+    throw new Error(
+      `API_BASE_URL points to a deprecated host (${parsed.host}). Update the build environment to the current production host.`,
+    );
   }
 
   return raw.replace(/\/+$/, '');

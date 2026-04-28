@@ -31,6 +31,58 @@ import { formatRelativeTime } from '../../utils/format';
 
 type Props = HomeScreenProps<'Notifications'>;
 
+// 알림 딥링크 URL 보안 검증.
+// 서버가 보낸 URL을 그대로 Linking.openURL에 넘기면 javascript:, intent://, tel:,
+// 피싱 사이트 등 임의 스킴/호스트 호출이 가능하다.
+// 정책:
+//   1) https 스킴은 신뢰 호스트만 허용
+//   2) 앱 내부 딥링크 nearprice:// 는 허용 (예: nearprice://flyer/{id})
+const ALLOWED_NOTIFICATION_URL_HOSTS: readonly string[] = [
+  // 자체 도메인 — 운영/사장님센터 페이지 등
+  'nearprice.kr',
+  'www.nearprice.kr',
+  'bipanlife.com',
+  'www.bipanlife.com',
+];
+
+const ALLOWED_APP_DEEPLINK_HOSTS: readonly string[] = [
+  'flyer',
+];
+
+const isSafeNotificationUrl = (raw: string): boolean => {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'nearprice:') {
+      const host = parsed.hostname.toLowerCase();
+      return ALLOWED_APP_DEEPLINK_HOSTS.includes(host);
+    }
+    if (parsed.protocol !== 'https:') {
+      return false;
+    }
+    const host = parsed.hostname.toLowerCase();
+    return ALLOWED_NOTIFICATION_URL_HOSTS.some(
+      (allowed) => host === allowed || host.endsWith(`.${allowed}`),
+    );
+  } catch {
+    return false;
+  }
+};
+
+const parseAppDeepLink = (
+  raw: string,
+): { type: 'flyer'; flyerId: string } | null => {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'nearprice:') return null;
+    if (parsed.hostname !== 'flyer') return null;
+    const flyerId = parsed.pathname.replace(/^\//, '').trim();
+    if (!flyerId) return null;
+    return { type: 'flyer', flyerId };
+  } catch {
+    return null;
+  }
+};
+
 const NotificationListScreen: React.FC<Props> = ({ navigation }) => {
   const {
     data,
@@ -104,8 +156,22 @@ const NotificationListScreen: React.FC<Props> = ({ navigation }) => {
           }
           break;
         case 'url':
-          // 외부/커스텀 URL — linkId가 URL 문자열
+          // 외부/커스텀 URL — linkId가 URL 문자열.
+          // 1) nearprice:// 앱 딥링크는 내부 네비게이션으로 처리
+          // 2) 외부 URL은 https + 신뢰 호스트만 허용
           if (notif.linkId) {
+            const appLink = parseAppDeepLink(notif.linkId);
+            if (appLink?.type === 'flyer') {
+              navigation
+                .getParent<BottomTabNavigationProp<MainTabParamList>>()
+                ?.navigate('Flyer', {
+                  screen: 'FlyerDetail',
+                  params: { flyerId: appLink.flyerId },
+                });
+              break;
+            }
+          }
+          if (notif.linkId && isSafeNotificationUrl(notif.linkId)) {
             Linking.openURL(notif.linkId).catch(() => {
               // 열 수 없는 URL은 무시
             });

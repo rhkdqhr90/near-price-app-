@@ -21,7 +21,7 @@ import { typography, PJS } from '../../theme/typography';
 import { useInfiniteRecentPrices } from '../../hooks/queries/usePrices';
 import { useFlyers } from '../../hooks/queries/useFlyers';
 import { useUnreadNotificationCount } from '../../hooks/queries/useNotifications';
-import { useLocationStore } from '../../store/locationStore';
+import { RADIUS_OPTIONS, useLocationStore, type RadiusOption } from '../../store/locationStore';
 import EmptyState from '../../components/common/EmptyState';
 import SkeletonCard from '../../components/common/SkeletonCard';
 import TagIcon from '../../components/icons/TagIcon';
@@ -47,6 +47,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const userLat = useLocationStore((s) => s.latitude);
   const userLng = useLocationStore((s) => s.longitude);
   const radius = useLocationStore((s) => s.radius);
+  const setRadius = useLocationStore((s) => s.setRadius);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTagIdx, setActiveTagIdx] = useState<number | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -154,6 +155,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       setIsRefreshing(false);
     }
   }, [refetchRecent]);
+
+  const handleRadiusSelect = useCallback((nextRadius: RadiusOption) => {
+    setRadius(nextRadius);
+  }, [setRadius]);
 
   const handleNavigatePriceRegister = useCallback(() => {
     navigation
@@ -356,6 +361,31 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.radiusSelectorWrap}>
+        {RADIUS_OPTIONS.map((option) => {
+          const isActive = option === radius;
+          const label = `${Math.round(option / 1000)}km`;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => handleRadiusSelect(option)}
+              style={({ pressed }) => [
+                styles.radiusChip,
+                isActive && styles.radiusChipActive,
+                pressed && styles.radiusChipPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`반경 ${label} 설정`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.radiusChipText, isActive && styles.radiusChipTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* ── 검색바 ── */}
@@ -587,7 +617,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  radiusSelectorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    backgroundColor: colors.surface,
+  },
+  radiusChip: {
+    minWidth: 56,
+    height: spacing.touchTargetMin,
+    borderRadius: spacing.radiusFull,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  radiusChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  radiusChipPressed: {
+    opacity: 0.82,
+  },
+  radiusChipText: {
+    ...typography.captionBold,
+    color: colors.gray700,
+  },
+  radiusChipTextActive: {
+    color: colors.white,
   },
   searchBar: {
     flexDirection: 'row',

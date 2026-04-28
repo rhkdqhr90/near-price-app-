@@ -3,6 +3,7 @@ import {
   View, Text, Image, ScrollView, TouchableOpacity,
   StyleSheet, Platform,
 } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import TextRecognition, { TextRecognitionScript } from '@react-native-ml-kit/text-recognition';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import LoadingView from '../../components/common/LoadingView';
@@ -133,7 +134,13 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
         if (cancelled) return;
         setRawText(result.text);
         setOcrItems(parseOcrText(result.text));
-      } catch {
+      } catch (error) {
+        Sentry.captureException(error, {
+          tags: {
+            screen: 'OcrResultScreen',
+            action: 'recognize',
+          },
+        });
         if (!cancelled) { setOcrItems([]); setIsError(true); }
       } finally {
         if (!cancelled) setIsLoading(false);
