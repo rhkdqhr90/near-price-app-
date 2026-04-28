@@ -18,6 +18,7 @@ import { useAuthStore } from '../../store/authStore';
 import type { AuthScreenProps } from '../../navigation/types';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 
 
 type Props = AuthScreenProps<'Login'>;
@@ -243,9 +244,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   appName: {
-    fontSize: 32,
-    fontWeight: '800' as const,
+    ...typography.brand,
     color: colors.onBackground,
+    fontSize: 32,
     letterSpacing: -1,
     marginBottom: 2,
   },

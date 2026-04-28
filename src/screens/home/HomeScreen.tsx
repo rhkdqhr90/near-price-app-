@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -55,13 +55,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const unreadCount = unreadData?.count ?? 0;
 
   const radiusLabel = radius >= 1000 ? `${Math.round(radius / 1000)}km` : `${radius}m`;
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    });
-    return unsubscribe;
-  }, [navigation]);
 
   const {
     data: recentData,
@@ -147,6 +140,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       navigation.navigate('PriceDetail', {
         productId: card.productId,
         productName: card.productName,
+        autoExpandTopStore: true,
       });
     },
     [navigation, nearbyPrices],

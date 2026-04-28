@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -69,12 +69,17 @@ const haversineM = (lat1: number, lng1: number, lat2: number, lng2: number): num
  * 중복 등록은 이력 추가, 달라요 👎 N 수치 병기.
  */
 const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { productId: paramProductId, productName: paramProductName, priceId: paramPriceId } =
-    route.params;
+  const {
+    productId: paramProductId,
+    productName: paramProductName,
+    priceId: paramPriceId,
+    autoExpandTopStore = false,
+  } = route.params;
   const insets = useSafeAreaInsets();
 
   const [tab, setTab] = useState<TabKey>('stores');
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
+  const didAutoExpandTopStoreRef = useRef(false);
 
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputePrice, setDisputePrice] = useState('');
@@ -232,6 +237,21 @@ const PriceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // 찜은 "상품" 단위이므로 paramProductId 우선, 없으면 focusedPrice에서 파생.
   const productIdForActions = paramProductId || focusedPrice?.product.id || '';
+
+  useEffect(() => {
+    if (!autoExpandTopStore) {
+      return;
+    }
+    if (didAutoExpandTopStoreRef.current) {
+      return;
+    }
+    const topStoreId = storeRepresentatives[0]?.store.id;
+    if (!topStoreId) {
+      return;
+    }
+    setExpandedStoreId(topStoreId);
+    didAutoExpandTopStoreRef.current = true;
+  }, [autoExpandTopStore, storeRepresentatives]);
 
   const isWishlisted = useMemo(() => {
     if (!wishlist || !productIdForActions) return false;

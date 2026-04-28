@@ -3,7 +3,7 @@ import {
   View, Text, Image, ScrollView, TouchableOpacity,
   StyleSheet, Platform,
 } from 'react-native';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
+import TextRecognition, { TextRecognitionScript } from '@react-native-ml-kit/text-recognition';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import LoadingView from '../../components/common/LoadingView';
 import ErrorView from '../../components/common/ErrorView';
@@ -25,29 +25,88 @@ const normalizeImageUri = (uri: string): string => {
   return uri;
 };
 
+// 가격 정규식 — 한글 문맥("쪽파 1단 1000원" 등)에서 앞쪽 1~2자리 숫자에 잘못 잡히지 않도록
+//   (1) 콤마 형식: 1,000 / 12,000 (콤마 그룹 1개 이상 필수)
+//   (2) 평문 형식: 100~999999 (3~6자리)
+// 한 라인에 여러 후보가 있으면 "원/₩ 마커가 붙은 것 → 콤마 있는 것 → 큰 값" 순으로 가장 그럴듯한 가격 선정.
+const PRICE_TOKEN_REGEX = /(₩|\\)?(\d{1,3}(?:,\d{3})+|\d{3,6})(\s*원)?/g;
+// 추출된 name이 또 다른 가격 패턴을 포함하는지 검사용 (non-global)
+const PRICE_LIKE_REGEX = /(?:\d{1,3}(?:,\d{3})+|\d{3,6})/;
+
+interface PriceCandidate {
+  full: string;
+  num: number;
+  hasMarker: boolean; // ₩ 또는 원
+  hasComma: boolean;
+}
+
+const pickBestPrice = (line: string): PriceCandidate | null => {
+  const candidates: PriceCandidate[] = [];
+  for (const m of line.matchAll(PRICE_TOKEN_REGEX)) {
+    const num = parseInt(m[2].replace(/,/g, ''), 10);
+    if (num < 100 || num > 999999) { continue; }
+    candidates.push({
+      full: m[0],
+      num,
+      hasMarker: !!(m[1] || m[3]),
+      hasComma: m[2].includes(','),
+    });
+  }
+  if (candidates.length === 0) { return null; }
+  candidates.sort((a, b) => {
+    if (a.hasMarker !== b.hasMarker) { return a.hasMarker ? -1 : 1; }
+    if (a.hasComma !== b.hasComma) { return a.hasComma ? -1 : 1; }
+    return b.num - a.num;
+  });
+  return candidates[0];
+};
+
+interface RankedCandidate {
+  name: string;
+  price: string;
+  num: number;
+  hasMarker: boolean;
+  hasComma: boolean;
+}
+
+// 가격표 한 장에는 보통 상품 1개만 있으므로(영수증 멀티 상품 시나리오는 미지원),
+// 라인별 후보를 수집한 뒤 "원/₩ 마커 → 콤마 → 큰 값" 신뢰도 순으로 최상위 1개만 반환한다.
+// 사용자가 틀렸다고 판단하면 화면 하단 "직접 입력" 버튼 사용.
 const parseOcrText = (text: string): OcrItem[] => {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const items: OcrItem[] = [];
+  const candidates: RankedCandidate[] = [];
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // ₩ 또는 \ (일부 OCR에서 ₩를 역슬래시로 인식) 앞에 붙는 경우 포함
-    const priceMatch = line.match(/(?:₩|\\)?(\d{1,3}(?:,\d{3})*|\d{3,6})(?:\s*원)?/);
-    if (priceMatch) {
-      const priceNum = parseInt(priceMatch[1].replace(/,/g, ''), 10);
-      if (priceNum >= 100 && priceNum <= 999999) {
-        const namePart = line.replace(priceMatch[0], '').replace(/원|₩/g, '').trim();
-        const name = namePart.length > 1 ? namePart : (lines[i - 1] ?? '').trim();
-        if (name.length > 1) items.push({ name: name.substring(0, 30), price: String(priceNum) });
-      }
-    }
+    const best = pickBestPrice(line);
+    if (!best) { continue; }
+
+    // 같은 라인에서 가격 토큰을 제외한 나머지를 상품명으로. 단, 남은 문자열에 또 다른
+    // 가격 패턴이 포함되어 있다면(예: "1,000원 2,000원") 잘못된 이름이 되므로 이전 라인을 사용.
+    const stripped = line.replace(best.full, '').replace(/원|₩/g, '').trim();
+    const looksLikePrice = PRICE_LIKE_REGEX.test(stripped);
+    const fromSameLine = stripped.length > 1 && !looksLikePrice;
+    const name = fromSameLine ? stripped : (lines[i - 1] ?? '').trim();
+    if (name.length <= 1) { continue; }
+
+    candidates.push({
+      name: name.substring(0, 30),
+      price: String(best.num),
+      num: best.num,
+      hasMarker: best.hasMarker,
+      hasComma: best.hasComma,
+    });
   }
-  const seen = new Set<string>();
-  return items.filter(item => {
-    const key = `${item.name}-${item.price}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 6);
+
+  if (candidates.length === 0) { return []; }
+
+  candidates.sort((a, b) => {
+    if (a.hasMarker !== b.hasMarker) { return a.hasMarker ? -1 : 1; }
+    if (a.hasComma !== b.hasComma) { return a.hasComma ? -1 : 1; }
+    return b.num - a.num;
+  });
+
+  return [{ name: candidates[0].name, price: candidates[0].price }];
 };
 
 const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -65,7 +124,12 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
     setOcrItems([]);
     (async () => {
       try {
-        const result = await TextRecognition.recognize(normalizeImageUri(imageUri));
+        // 한글 가격표 인식을 위해 KOREAN 스크립트 사용
+        // (KOREAN 모델은 한글 + 라틴 문자 + 숫자 모두 인식 가능)
+        const result = await TextRecognition.recognize(
+          normalizeImageUri(imageUri),
+          TextRecognitionScript.KOREAN,
+        );
         if (cancelled) return;
         setRawText(result.text);
         setOcrItems(parseOcrText(result.text));

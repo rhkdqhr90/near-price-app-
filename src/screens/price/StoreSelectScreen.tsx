@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Platform,
   PermissionsAndroid,
   TextInput,
@@ -96,6 +95,14 @@ interface GpsCoords {
   longitude: number;
 }
 
+/** GPS 위치 확인 단계 — 'pending'동안에는 검색 보류, 'failed' 시 동네 위치로 폴백하며 사용자에게 안내 */
+type GpsStatus = 'pending' | 'success' | 'failed';
+
+/** 매장 검색에 사용할 좌표 + 출처 (gps / region 폴백) */
+type SearchOrigin =
+  | { source: 'gps'; latitude: number; longitude: number }
+  | { source: 'region'; latitude: number; longitude: number };
+
 /** 선택된 매장 — DB 매장이거나 네이버 장소 (확정은 "다음" 버튼 탭 시점) */
 type SelectedStore =
   | { kind: 'db'; store: NearbyStoreResponse }
@@ -118,19 +125,43 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   useUnsavedChangesWarning();
 
   const [gpsCoords, setGpsCoords] = useState<GpsCoords | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>('pending');
   const [rawQuery, setRawQuery] = useState('');
   const debouncedQuery = useDebounce(rawQuery, 300);
   const [selected, setSelected] = useState<SelectedStore | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const initialRegionLat = useRef(regionLat);
   const initialRegionLng = useRef(regionLng);
   const mapRef = useRef<NaverMapViewRef>(null);
 
   const isSearching = debouncedQuery.trim().length >= 2;
-  const searchOriginLatitude = gpsCoords?.latitude ?? null;
-  const searchOriginLongitude = gpsCoords?.longitude ?? null;
-  const hasSearchOrigin =
-    searchOriginLatitude !== null && searchOriginLongitude !== null;
+
+  // GPS 확인이 끝난 후에만 검색 좌표를 결정한다.
+  // - GPS 성공: 현재 위치 사용
+  // - GPS 실패: 동네 설정 위치로 폴백 (배너로 사용자에게 안내)
+  // - GPS 확인 중(pending): null → 검색 보류
+  const searchOrigin: SearchOrigin | null = useMemo(() => {
+    if (gpsStatus === 'pending') {
+      return null;
+    }
+    if (gpsCoords) {
+      return {
+        source: 'gps',
+        latitude: gpsCoords.latitude,
+        longitude: gpsCoords.longitude,
+      };
+    }
+    if (regionLat != null && regionLng != null) {
+      return { source: 'region', latitude: regionLat, longitude: regionLng };
+    }
+    return null;
+  }, [gpsStatus, gpsCoords, regionLat, regionLng]);
+
+  const searchOriginLatitude = searchOrigin?.latitude ?? null;
+  const searchOriginLongitude = searchOrigin?.longitude ?? null;
+  const hasSearchOrigin = searchOrigin !== null;
+  const isUsingRegionFallback = searchOrigin?.source === 'region';
 
   const storedRegionHint = useMemo(
     () => normalizeRegionHint(regionName),
@@ -157,9 +188,10 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     data: nearbyStores,
     isLoading: isNearbyLoading,
     isError: isNearbyError,
+    refetch: refetchNearbyStores,
   } = useNearbyStores(
-    !isSearching ? gpsCoords?.latitude ?? regionLat ?? null : null,
-    !isSearching ? gpsCoords?.longitude ?? regionLng ?? null : null,
+    !isSearching ? searchOriginLatitude : null,
+    !isSearching ? searchOriginLongitude : null,
     NEARBY_RADIUS_M,
   );
 
@@ -168,6 +200,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     data: naverPlaces,
     isFetching: isNaverSearching,
     isError: isNaverError,
+    refetch: refetchNaverPlaces,
   } = useNaverPlaceSearch(
     debouncedQuery,
     isSearching && hasSearchOrigin,
@@ -179,6 +212,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     data: dbSearchStores,
     isFetching: isDbSearching,
     isError: isDbSearchError,
+    refetch: refetchDbSearch,
   } = useQuery({
     queryKey: ['storeSearch', debouncedQuery],
     queryFn: () => storeApi.searchByName(debouncedQuery).then(r => r.data),
@@ -195,6 +229,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
 
       // 첫 마운트는 useEffect에서 처리, 재진입 시에만 GPS 재요청
       if (focusCountRef.current > 0) {
+        setGpsStatus('pending');
         Geolocation.getCurrentPosition(
           pos => {
             const coords: GpsCoords = {
@@ -202,6 +237,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
               longitude: pos.coords.longitude,
             };
             setGpsCoords(coords);
+            setGpsStatus('success');
             mapRef.current?.animateCameraTo({
               latitude: coords.latitude,
               longitude: coords.longitude,
@@ -210,6 +246,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
           },
           () => {
             setGpsCoords(null);
+            setGpsStatus('failed');
             if (initialRegionLat.current != null && initialRegionLng.current != null) {
               mapRef.current?.animateCameraTo({
                 latitude: initialRegionLat.current,
@@ -251,6 +288,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     const run = async () => {
       const hasPermission = await requestPermission();
       if (!hasPermission) {
+        setGpsStatus('failed');
         if (fallbackLat != null && fallbackLng != null) {
           mapRef.current?.animateCameraTo({
             latitude: fallbackLat,
@@ -268,6 +306,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
             longitude: pos.coords.longitude,
           };
           setGpsCoords(coords);
+          setGpsStatus('success');
           mapRef.current?.animateCameraTo({
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -276,6 +315,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
         },
         _error => {
           setGpsCoords(null);
+          setGpsStatus('failed');
           if (fallbackLat != null && fallbackLng != null) {
             mapRef.current?.animateCameraTo({
               latitude: fallbackLat,
@@ -283,7 +323,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
               zoom: 15,
             });
           } else {
-            Alert.alert('위치 정보 없음', '저장된 위치 정보가 없어 서울 기준으로 검색됩니다.');
+            setInlineError('저장된 위치 정보가 없어 서울 기준으로 검색 중입니다. 동네 설정 후 정확도가 높아집니다.');
           }
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0, forceRequestLocation: true },
@@ -429,6 +469,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleSelectItem = useCallback(
     (item: ListItem) => {
+      setInlineError(null);
       setSelected(item);
       const lat =
         item.kind === 'db'
@@ -468,11 +509,12 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       }
     },
     onSuccess: store => {
+      setInlineError(null);
       setStore(store.id, store.name);
       navigation.navigate('InputMethod');
     },
     onError: () => {
-      Alert.alert('오류', '매장 정보를 처리하는 데 실패했습니다.');
+      setInlineError('매장 정보를 처리하는 데 실패했습니다. 잠시 후 다시 시도해 주세요.');
     },
   });
 
@@ -484,6 +526,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   // ─── GPS 버튼 (지도 현재 위치 recenter) ───────────────────────────────────
   const handleRecenter = useCallback(() => {
     if (!gpsCoords) {
+      setGpsStatus('pending');
       Geolocation.getCurrentPosition(
         pos => {
           const coords: GpsCoords = {
@@ -491,6 +534,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
             longitude: pos.coords.longitude,
           };
           setGpsCoords(coords);
+          setGpsStatus('success');
           mapRef.current?.animateCameraTo({
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -498,7 +542,8 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
           });
         },
         () => {
-          Alert.alert('현재 위치 확인 필요', 'GPS를 켜고 위치 권한을 허용한 뒤 다시 시도해 주세요.');
+          setGpsStatus('failed');
+          setInlineError('현재 위치를 확인하지 못했습니다. GPS와 위치 권한을 확인한 뒤 다시 시도해 주세요.');
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0, forceRequestLocation: true },
       );
@@ -552,13 +597,24 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     [],
   );
 
+  const isAwaitingGps = gpsStatus === 'pending';
   const isListLoading =
+    isAwaitingGps ||
     (!isSearching && isNearbyLoading) ||
     (isSearching && hasSearchOrigin && (isNaverSearching || isDbSearching));
   const isAwaitingGpsForSearch = isSearching && !hasSearchOrigin;
   const isListError =
     (!isSearching && isNearbyError) ||
     (isSearching && hasSearchOrigin && (isNaverError || isDbSearchError));
+
+  const handleRetryList = useCallback(() => {
+    setInlineError(null);
+    if (isSearching && hasSearchOrigin) {
+      void Promise.all([refetchNaverPlaces(), refetchDbSearch()]);
+      return;
+    }
+    void refetchNearbyStores();
+  }, [isSearching, hasSearchOrigin, refetchNaverPlaces, refetchDbSearch, refetchNearbyStores]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -582,6 +638,25 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
         <Text style={styles.stepKicker}>STEP 1 / 3</Text>
         <Text style={styles.stepTitle}>어디서 장보고 계세요?</Text>
       </View>
+
+      {inlineError ? (
+        <View
+          style={styles.errorBanner}
+          accessible={true}
+          accessibilityLiveRegion="polite"
+          accessibilityLabel={`오류: ${inlineError}`}
+        >
+          <Text style={styles.errorBannerText}>{inlineError}</Text>
+          <TouchableOpacity
+            onPress={() => setInlineError(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="오류 메시지 닫기"
+          >
+            <Text style={styles.errorBannerClose}>닫기</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* 지도 (260px 고정) */}
       <View style={styles.mapWrap}>
@@ -675,6 +750,21 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
+      {/* GPS 폴백 안내 — 현재 위치 확인 실패 시에만 표시 */}
+      {isUsingRegionFallback ? (
+        <TouchableOpacity
+          style={styles.fallbackBanner}
+          onPress={handleRecenter}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="현재 위치로 다시 검색"
+        >
+          <Text style={styles.fallbackBannerText}>
+            현재 위치를 확인하지 못해 동네 설정 위치로 검색 중이에요. 탭하여 다시 시도하기
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
       {/* 리스트 헤더 */}
       <View style={styles.listHeader}>
         <Text style={styles.listHeaderTitle}>
@@ -686,7 +776,14 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {/* 리스트 */}
-      {isListLoading ? (
+      {isAwaitingGps ? (
+        <View style={styles.listStatus}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.listStatusText, styles.listStatusTextSpaced]}>
+            현재 위치를 확인하는 중...
+          </Text>
+        </View>
+      ) : isListLoading ? (
         <View style={styles.listStatus}>
           <ActivityIndicator size="small" color={colors.primary} />
         </View>
@@ -697,6 +794,15 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       ) : isListError ? (
         <View style={styles.listStatus}>
           <Text style={styles.listStatusText}>매장을 불러오지 못했어요.</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={handleRetryList}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="매장 목록 다시 시도"
+          >
+            <Text style={styles.retryBtnText}>다시 시도</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -882,6 +988,58 @@ const styles = StyleSheet.create({
   listStatusText: {
     ...typography.bodySm,
     color: colors.gray600,
+  },
+  listStatusTextSpaced: {
+    marginTop: spacing.sm,
+  },
+  retryBtn: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + spacing.micro,
+    borderRadius: spacing.radiusSm,
+    backgroundColor: colors.primary,
+  },
+  retryBtnText: {
+    ...typography.captionBold,
+    color: colors.white,
+  },
+  fallbackBanner: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primaryLight,
+    borderRadius: spacing.radiusSm,
+    borderWidth: spacing.borderHairline,
+    borderColor: colors.primary,
+  },
+  fallbackBannerText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600' as const,
+  },
+  errorBanner: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.dangerLight,
+    borderRadius: spacing.radiusSm,
+    borderWidth: spacing.borderHairline,
+    borderColor: colors.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  errorBannerText: {
+    ...typography.caption,
+    color: colors.danger,
+    flex: 1,
+  },
+  errorBannerClose: {
+    ...typography.captionBold,
+    color: colors.danger,
   },
   emptyText: {
     ...typography.bodySm,

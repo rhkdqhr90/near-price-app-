@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@tanstack/react-query';
@@ -29,12 +29,14 @@ const StoreRegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   const [storeAddress, setStoreAddress] = useState('');
   const [storeType, setStoreType] = useState<StoreType | string>('mart');
   const [errors, setErrors] = useState<{ name?: string; address?: string }>({});
+  const [inlineError, setInlineError] = useState<string | null>(null);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeInput, setNewTypeInput] = useState('');
 
   // GPS 주소 자동 채우기
   const handleAutoFillAddress = useCallback(() => {
+    setInlineError(null);
     setIsAutoFilling(true);
     vworldApi.reverseGeocodeFullAddress(longitude, latitude)
       .then(address => {
@@ -42,10 +44,10 @@ const StoreRegisterScreen: React.FC<Props> = ({ route, navigation }) => {
           setStoreAddress(address);
           if (errors.address) setErrors(prev => ({ ...prev, address: undefined }));
         } else {
-          Alert.alert('주소 조회 실패', '직접 입력해주세요.');
+          setInlineError('주소를 자동으로 찾지 못했습니다. 주소를 직접 입력해 주세요.');
         }
       })
-      .catch(() => Alert.alert('오류', '주소 조회 실패'))
+      .catch(() => setInlineError('주소 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.'))
       .finally(() => setIsAutoFilling(false));
   }, [latitude, longitude, errors.address]);
 
@@ -54,13 +56,14 @@ const StoreRegisterScreen: React.FC<Props> = ({ route, navigation }) => {
     mutationFn: (dto: CreateStoreDto) => storeApi.create(dto).then(r => r.data),
     onSuccess: created => {
       if (!created?.id || !created?.name) {
-        Alert.alert('오류', '매장 등록에 실패했습니다.');
+        setInlineError('매장 등록에 실패했습니다. 입력값을 확인하고 다시 시도해 주세요.');
         return;
       }
+      setInlineError(null);
       setStore(created.id, created.name);
       navigation.navigate('InputMethod');
     },
-    onError: () => Alert.alert('오류', '매장 등록에 실패했습니다.'),
+    onError: () => setInlineError('매장 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'),
   });
 
   const handleSubmit = useCallback(() => {
@@ -81,8 +84,13 @@ const StoreRegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   const handleAddType = useCallback(async () => {
     if (!newTypeInput.trim()) return;
     const ok = await addStoreType(newTypeInput.trim());
-    if (ok) { setNewTypeInput(''); setShowAddType(false); }
-    else { Alert.alert('오류', '이미 존재하는 카테고리입니다.'); }
+    if (ok) {
+      setInlineError(null);
+      setNewTypeInput('');
+      setShowAddType(false);
+    } else {
+      setInlineError('이미 존재하는 카테고리입니다. 다른 이름을 사용해 주세요.');
+    }
   }, [newTypeInput, addStoreType]);
 
   return (
@@ -127,6 +135,25 @@ const StoreRegisterScreen: React.FC<Props> = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>새 매장 등록</Text>
+
+        {inlineError ? (
+          <View
+            style={styles.errorBanner}
+            accessible={true}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`오류: ${inlineError}`}
+          >
+            <Text style={styles.errorBannerText}>{inlineError}</Text>
+            <TouchableOpacity
+              onPress={() => setInlineError(null)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="오류 메시지 닫기"
+            >
+              <Text style={styles.errorBannerClose}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* 매장명 */}
         <Text style={styles.label}>매장명 *</Text>
@@ -233,6 +260,28 @@ const styles = StyleSheet.create({
   form: { flex: 1 },
   formContent: { padding: spacing.xl },
   title: { ...typography.headingXl, marginBottom: spacing.lg },
+  errorBanner: {
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.dangerLight,
+    borderRadius: spacing.radiusSm,
+    borderWidth: spacing.borderHairline,
+    borderColor: colors.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  errorBannerText: {
+    ...typography.caption,
+    color: colors.danger,
+    flex: 1,
+  },
+  errorBannerClose: {
+    ...typography.captionBold,
+    color: colors.danger,
+  },
   label: { ...typography.bodySm, fontWeight: '600' as const, color: colors.gray600, marginBottom: spacing.xs },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.xs },
   autoFillBtn: { ...typography.bodySm, color: colors.primary, fontWeight: '600' as const, textDecorationLine: 'underline' as const },

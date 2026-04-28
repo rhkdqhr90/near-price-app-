@@ -104,9 +104,32 @@ export const useStorePrices = (storeId: string) => {
 
 export const useDeleteMyPrice = () => {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, string>({
+  return useMutation<void, Error, string, { previousMine?: PriceResponse[] }>({
     mutationFn: (priceId: string) => priceApi.remove(priceId).then(() => undefined),
-    onSuccess: () => {
+    onMutate: async (priceId: string) => {
+      await queryClient.cancelQueries({ queryKey: priceKeys.mine });
+      const previousMine = queryClient.getQueryData<PriceResponse[]>(priceKeys.mine);
+
+      queryClient.setQueryData<PriceResponse[]>(priceKeys.mine, (current) => {
+        if (!current) return current;
+        return current.filter((item) => item.id !== priceId);
+      });
+
+      return { previousMine };
+    },
+    onError: (_error, _priceId, context) => {
+      if (context?.previousMine) {
+        queryClient.setQueryData(priceKeys.mine, context.previousMine);
+      }
+    },
+    onSuccess: (_data, priceId) => {
+      queryClient.setQueryData<PriceResponse[]>(priceKeys.mine, (current) => {
+        if (!current) return current;
+        return current.filter((item) => item.id !== priceId);
+      });
+      queryClient
+        .invalidateQueries({ queryKey: priceKeys.all })
+        .catch(() => undefined);
       queryClient
         .invalidateQueries({ queryKey: priceKeys.mine })
         .catch(() => undefined);

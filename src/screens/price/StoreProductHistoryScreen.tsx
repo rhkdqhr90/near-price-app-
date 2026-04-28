@@ -14,6 +14,7 @@ import { spacing } from '../../theme/spacing';
 import { typography, PJS } from '../../theme/typography';
 import { formatRelativeTime } from '../../utils/format';
 import ChevronLeftIcon from '../../components/icons/ChevronLeftIcon';
+import MapPinIcon from '../../components/icons/MapPinIcon';
 import { useStorePrices } from '../../hooks/queries/usePrices';
 import { openMapApp } from '../../utils/openMapApp';
 import type { PriceResponse } from '../../types/api.types';
@@ -116,7 +117,10 @@ const StoreProductHistoryScreen: React.FC<Props> = ({ route, navigation }) => {
             accessibilityLabel={`${storeName ?? '매장'}으로 길찾기`}
             activeOpacity={0.85}
           >
-            <Text style={styles.directionsBtnText}>📍 {storeName} 길찾기</Text>
+            <View style={styles.directionsBtnContent}>
+              <MapPinIcon size={spacing.iconSm} color={colors.white} />
+              <Text style={styles.directionsBtnText}>{storeName} 길찾기</Text>
+            </View>
           </TouchableOpacity>
         ) : null}
 
@@ -271,6 +275,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  directionsBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   directionsBtnText: {
     fontFamily: PJS.bold,

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, Image, LayoutAnimation,
+  StyleSheet, Alert, Image, LayoutAnimation, Modal,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -103,6 +103,11 @@ interface FormErrors {
   cardLabel?: string;
   cardDiscountType?: string;
   cardDiscountValue?: string;
+}
+
+interface InlineNotice {
+  type: 'error' | 'success';
+  message: string;
 }
 
 const parseDateString = (s: string): Date | null => {
@@ -262,6 +267,9 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showEndsAtPicker, setShowEndsAtPicker] = useState(false);
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
+  const [showPostAddActions, setShowPostAddActions] = useState(false);
+  const [lastAddedProductName, setLastAddedProductName] = useState('');
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -281,8 +289,9 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     setProductName(v);
     setProductId(undefined);
     setShowSuggestions(true);
+    if (inlineNotice) setInlineNotice(null);
     if (v.trim()) setErrors((prev) => ({ ...prev, productName: undefined }));
-  }, []);
+  }, [inlineNotice]);
 
   const handlePriceChange = useCallback((v: string) => {
     const cleaned = v.replace(/[^0-9]/g, '');
@@ -291,7 +300,8 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     if (cleaned && !isNaN(num) && num > 0) {
       setErrors((prev) => ({ ...prev, price: undefined }));
     }
-  }, []);
+    if (inlineNotice) setInlineNotice(null);
+  }, [inlineNotice]);
 
   const handleTodayOnly = useCallback(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -325,7 +335,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       }
       const imageMeta = resolveImageMeta(asset);
       if (!imageMeta) {
-        Alert.alert('오류', '유효한 이미지를 선택해 주세요.');
+        setInlineNotice({ type: 'error', message: '유효한 이미지를 선택해 주세요.' });
         return;
       }
 
@@ -333,7 +343,10 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         imageMeta.mimeType &&
         !(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(imageMeta.mimeType)
       ) {
-        Alert.alert('지원하지 않는 이미지 형식', 'JPG, PNG, WEBP 형식의 사진만 등록할 수 있어요.');
+        setInlineNotice({
+          type: 'error',
+          message: 'JPG, PNG, WEBP 형식의 사진만 등록할 수 있어요.',
+        });
         return;
       }
 
@@ -341,6 +354,7 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       setImageFileName(imageMeta.fileName);
       setImageMimeType(imageMeta.mimeType);
       setImageFileSize(imageMeta.fileSize);
+      setInlineNotice(null);
       setErrors((prev) => ({ ...prev, image: undefined }));
     };
 
@@ -448,10 +462,12 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (hasError) {
       setErrors(newErrors);
+      setInlineNotice({ type: 'error', message: '입력값을 확인해 주세요.' });
       return;
     }
 
     setErrors({});
+    setInlineNotice(null);
 
     const item = {
       productId,
@@ -492,14 +508,8 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       navigation.navigate('Confirm');
     } else {
       addItem(item);
-      Alert.alert(
-        '등록 완료',
-        `${item.productName}이(가) 추가됐어요.\n같은 매장에서 더 등록할까요?`,
-        [
-          { text: '더 등록할게요', onPress: () => navigation.navigate('InputMethod') },
-          { text: '완료할게요', onPress: () => navigation.navigate('Confirm') },
-        ],
-      );
+      setLastAddedProductName(item.productName);
+      setShowPostAddActions(true);
     }
   }, [
     productName, price, productId, selectedUnit, quantity,
@@ -547,6 +557,42 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.ocrBannerText}>AI가 가격표에서 정보를 인식했어요</Text>
           </View>
         )}
+
+        {inlineNotice ? (
+          <View
+            style={[
+              styles.inlineNotice,
+              inlineNotice.type === 'error' ? styles.inlineNoticeError : styles.inlineNoticeSuccess,
+            ]}
+            accessible={true}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={inlineNotice.message}
+          >
+            <Text
+              style={[
+                styles.inlineNoticeText,
+                inlineNotice.type === 'error' ? styles.inlineNoticeTextError : styles.inlineNoticeTextSuccess,
+              ]}
+            >
+              {inlineNotice.message}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setInlineNotice(null)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="안내 메시지 닫기"
+            >
+              <Text
+                style={[
+                  styles.inlineNoticeClose,
+                  inlineNotice.type === 'error' ? styles.inlineNoticeTextError : styles.inlineNoticeTextSuccess,
+                ]}
+              >
+                닫기
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* 상품명 */}
         <View style={styles.field}>
@@ -1112,6 +1158,51 @@ const ItemDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showPostAddActions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPostAddActions(false)}
+      >
+        <View style={styles.postAddModalOverlay}>
+          <View style={styles.postAddModalCard}>
+            <Text style={styles.postAddModalTitle}>등록 완료</Text>
+            <Text style={styles.postAddModalMessage}>
+              {lastAddedProductName}이(가) 추가됐어요.
+            </Text>
+            <Text style={styles.postAddModalSubMessage}>같은 매장에서 더 등록할까요?</Text>
+
+            <View style={styles.postAddActionsRow}>
+              <TouchableOpacity
+                style={styles.postAddSecondaryBtn}
+                onPress={() => {
+                  setShowPostAddActions(false);
+                  navigation.navigate('InputMethod');
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="더 등록할게요"
+              >
+                <Text style={styles.postAddSecondaryBtnText}>더 등록할게요</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.postAddPrimaryBtn}
+                onPress={() => {
+                  setShowPostAddActions(false);
+                  navigation.navigate('Confirm');
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="완료할게요"
+              >
+                <Text style={styles.postAddPrimaryBtnText}>완료할게요</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -1145,6 +1236,38 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     fontWeight: '700' as const,
     color: colors.success,
+  },
+  inlineNotice: {
+    marginTop: spacing.sm,
+    borderRadius: spacing.radiusMd,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: spacing.borderHairline,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  inlineNoticeError: {
+    backgroundColor: colors.dangerLight,
+    borderColor: colors.danger,
+  },
+  inlineNoticeSuccess: {
+    backgroundColor: colors.successLight,
+    borderColor: colors.success,
+  },
+  inlineNoticeText: {
+    ...typography.bodySm,
+    flex: 1,
+  },
+  inlineNoticeTextError: {
+    color: colors.danger,
+  },
+  inlineNoticeTextSuccess: {
+    color: colors.success,
+  },
+  inlineNoticeClose: {
+    ...typography.captionBold,
   },
 
   field: { marginTop: spacing.lg + spacing.micro },
@@ -1401,6 +1524,74 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   submitBtnTextDisabled: { color: colors.gray600 },
+
+  postAddModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.modalOverlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  postAddModalCard: {
+    width: '100%',
+    maxWidth: spacing.modalMaxWidth,
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusLg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    borderWidth: spacing.borderHairline,
+    borderColor: colors.gray200,
+  },
+  postAddModalTitle: {
+    ...typography.headingMd,
+    color: colors.onBackground,
+    textAlign: 'center',
+  },
+  postAddModalMessage: {
+    ...typography.body,
+    color: colors.onBackground,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
+  postAddModalSubMessage: {
+    ...typography.bodySm,
+    color: colors.gray600,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  postAddActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
+  postAddSecondaryBtn: {
+    flex: 1,
+    height: spacing.buttonHeight,
+    borderRadius: spacing.radiusMd,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  postAddSecondaryBtnText: {
+    ...typography.bodySm,
+    color: colors.onBackground,
+    fontWeight: '700' as const,
+  },
+  postAddPrimaryBtn: {
+    flex: 1,
+    height: spacing.buttonHeight,
+    borderRadius: spacing.radiusMd,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  postAddPrimaryBtnText: {
+    ...typography.bodySm,
+    color: colors.white,
+    fontWeight: '700' as const,
+  },
 });
 
 export default ItemDetailScreen;

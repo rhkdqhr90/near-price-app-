@@ -224,7 +224,7 @@ const FlyerScreen: React.FC<Props> = ({ navigation }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerWrap}>
+        <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, spacing.md) + spacing.xs }]}>
           <View style={styles.headerTopRow}>
             <View>
               <Text style={[styles.headerTitle, { color: palette.text }]}>동네 전단지</Text>
@@ -358,7 +358,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerWrap: {
-    paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
   headerTopRow: {

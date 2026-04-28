@@ -12,6 +12,7 @@ import type { FlyerResponse, FlyerTemplateType } from '../../types/api.types';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import CloseIcon from '../icons/CloseIcon';
 import ColorFlyerTemplate from './ColorFlyerTemplate';
 import NewsFlyerTemplate from './NewsFlyerTemplate';
 import RisoFlyerTemplate from './RisoFlyerTemplate';
@@ -90,7 +91,10 @@ const FlyerPreviewModal: React.FC<Props> = ({ flyer, onClose }) => {
             accessibilityRole="button"
             accessibilityLabel="미리보기 닫기"
           >
-            <Text style={styles.closeBtnText}>✕ 닫기</Text>
+            <View style={styles.closeBtnContent}>
+              <CloseIcon size={spacing.iconSm} color={colors.gray700} />
+              <Text style={styles.closeBtnText}>닫기</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -199,6 +203,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: spacing.radiusMd,
     backgroundColor: colors.gray100,
+  },
+  closeBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   closeBtnText: {
     ...typography.bodySm,
