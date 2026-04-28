@@ -71,6 +71,39 @@ interface SearchPriceCard {
   quantity: number | null;
 }
 
+interface SearchProductThumbProps {
+  imageUrl: string | null;
+  productName: string;
+}
+
+const SearchProductThumb: React.FC<SearchProductThumbProps> = ({ imageUrl, productName }) => {
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUrl]);
+
+  if (!imageUrl || imageLoadFailed) {
+    return (
+      <View style={styles.listThumbPlaceholder}>
+        <TagIcon size={22} color={colors.gray400} />
+      </View>
+    );
+  }
+
+  return (
+    <ResilientImage
+      uri={imageUrl}
+      style={styles.listThumb}
+      resizeMode="cover"
+      maxRetries={1}
+      retryDelayMs={120}
+      onPermanentError={() => setImageLoadFailed(true)}
+      accessibilityLabel={`${productName} 상품 이미지`}
+    />
+  );
+};
+
 const groupSearchPricesByProduct = (prices: PriceResponse[]): SearchPriceCard[] => {
   const map = new Map<string, PriceResponse[]>();
   prices.forEach((p) => {
@@ -224,20 +257,7 @@ const SearchScreen: React.FC<Props> = ({ navigation, route }) => {
         >
           {/* 썸네일 */}
           <View style={styles.listThumbWrap}>
-            {imageUri ? (
-              <ResilientImage
-                uri={imageUri}
-                style={styles.listThumb}
-                resizeMode="cover"
-                maxRetries={1}
-                retryDelayMs={120}
-                accessibilityLabel={`${item.productName} 상품 이미지`}
-              />
-            ) : (
-              <View style={styles.listThumbPlaceholder}>
-                <TagIcon size={22} color={colors.gray400} />
-              </View>
-            )}
+            <SearchProductThumb imageUrl={imageUri} productName={item.productName} />
           </View>
 
           {/* 좌측 정보 */}

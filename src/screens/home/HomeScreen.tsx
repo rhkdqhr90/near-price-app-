@@ -427,7 +427,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       <FlatList
         ref={listRef}
         data={feedCards}
-        keyExtractor={(item) => item.productId}
+        keyExtractor={(item) => `${item.productId}::${item.unitType ?? 'other'}`}
         renderItem={renderCard}
         contentContainerStyle={listContentStyle}
         showsVerticalScrollIndicator={false}

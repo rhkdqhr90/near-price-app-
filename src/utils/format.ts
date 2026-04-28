@@ -1,5 +1,8 @@
 import { API_BASE_URL } from './config';
 
+const API_BASE = API_BASE_URL.replace(/\/+$/, '');
+const INVALID_URL_LITERALS = new Set(['null', 'undefined', 'nan', 'none', 'n/a']);
+
 /**
  * 백엔드에서 내려온 이미지 URL을 현재 기기에서 접근 가능한 URL로 변환.
  * - 로컬/LAN 주소 (에뮬레이터 10.0.2.2, localhost, 192.168.x.x 등) → API_BASE_URL로 교체
@@ -7,18 +10,29 @@ import { API_BASE_URL } from './config';
  * - 포트 없는 외부 CDN URL은 교체하지 않음
  */
 export const fixImageUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null;
-  if (!url.startsWith('http')) {
-    return `${API_BASE_URL}/${url.replace(/^\//, '')}`;
+  if (url == null) return null;
+
+  const raw = String(url).trim();
+  if (!raw) return null;
+  if (INVALID_URL_LITERALS.has(raw.toLowerCase())) return null;
+
+  const normalizedSlashes = raw.replace(/\\/g, '/');
+  const withScheme = normalizedSlashes.startsWith('//')
+    ? `https:${normalizedSlashes}`
+    : normalizedSlashes;
+
+  if (!/^https?:\/\//i.test(withScheme)) {
+    return `${API_BASE}/${withScheme.replace(/^\/+/, '')}`;
   }
-  const normalized = url.replace(
-    /https?:\/\/(?:localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+/g,
-    API_BASE_URL,
+
+  const normalized = withScheme.replace(
+    /^https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}|0\.0\.0\.0|host\.docker\.internal)(?::\d+)?/i,
+    API_BASE,
   );
 
   // Android cleartext 정책으로 외부 http 이미지는 로드 실패할 수 있어 https로 승격
-  if (normalized.startsWith('http://') && !normalized.startsWith(API_BASE_URL)) {
-    return normalized.replace('http://', 'https://');
+  if (/^http:\/\//i.test(normalized) && !normalized.startsWith(API_BASE)) {
+    return normalized.replace(/^http:\/\//i, 'https://');
   }
 
   return normalized;
