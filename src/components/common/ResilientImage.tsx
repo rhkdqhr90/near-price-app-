@@ -1,7 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, type ImageProps } from 'react-native';
+import FastImage, {
+  type FastImageProps,
+  type OnErrorEvent,
+} from '@d11/react-native-fast-image';
 
-interface ResilientImageProps extends Omit<ImageProps, 'source'> {
+/**
+ * 네트워크 이미지 로딩에 재시도 + 영구 실패 콜백을 얹은 래퍼.
+ *
+ * 내부 라이브러리: `@d11/react-native-fast-image` (Dream11/DS Horizon 포크, New Arch 지원)
+ *  - 메모리 + 디스크 캐시 (cacheControl: immutable)
+ *  - FlatList 가상화로 언마운트 후 재진입해도 캐시 히트 → 깜빡임 제거
+ *  - Fabric / TurboModules 호환
+ *
+ * RN 기본 `<Image>`는 캐시가 약해 같은 URL에도 재요청이 빈번 → 홈 카드에서 흰 화면 깜빡임.
+ * 그 문제 해결을 위한 교체.
+ */
+interface ResilientImageProps extends Omit<FastImageProps, 'source' | 'onError'> {
   uri: string;
   maxRetries?: number;
   retryDelayMs?: number;
@@ -38,7 +52,7 @@ const ResilientImage: React.FC<ResilientImageProps> = ({
     };
   }, []);
 
-  const handleError = () => {
+  const handleError = (_e: OnErrorEvent) => {
     if (didReportPermanentErrorRef.current) {
       return;
     }
@@ -59,10 +73,14 @@ const ResilientImage: React.FC<ResilientImageProps> = ({
   };
 
   return (
-    <Image
+    <FastImage
       key={`${uri}::${retryKey}`}
       {...rest}
-      source={{ uri }}
+      source={{
+        uri,
+        priority: FastImage.priority.normal,
+        cache: FastImage.cacheControl.immutable,
+      }}
       onError={handleError}
     />
   );

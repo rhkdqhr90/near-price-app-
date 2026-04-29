@@ -71,6 +71,21 @@
 -keep class com.lugg.RNCConfig.** { *; }
 -keep class com.nearpriceapp.BuildConfig { *; }
 
+# Glide (used internally by @d11/react-native-fast-image v8)
+# 어노테이션 기반 모듈 등록을 R8이 못 찾으면 런타임 NPE — keep 필수.
+-keep public class * extends com.bumptech.glide.module.AppGlideModule
+-keep class com.bumptech.glide.GeneratedAppGlideModuleImpl
+-keep class * implements com.bumptech.glide.module.GlideModule
+-keep class * extends com.bumptech.glide.module.LibraryGlideModule
+-keep public enum com.bumptech.glide.load.ImageHeaderParser$** {
+    **[] $VALUES;
+    public *;
+}
+-keepresourcexmlelements manifest/application/meta-data@value=GlideModule
+
+# @d11/react-native-fast-image — 패키지 namespace는 d11 포크에서도 com.dylanvann.fastimage 유지.
+-keep class com.dylanvann.fastimage.** { *; }
+
 -dontwarn com.kakao.**
 -dontwarn com.naver.maps.**
 -dontwarn com.google.mlkit.**
@@ -78,3 +93,4 @@
 -dontwarn retrofit2.**
 -dontwarn okhttp3.**
 -dontwarn okio.**
+-dontwarn com.bumptech.glide.**
