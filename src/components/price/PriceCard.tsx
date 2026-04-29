@@ -17,6 +17,9 @@ interface PriceCardProps {
   item: ProductPriceCard;
   onPress?: (productId: string) => void;
   style?: ViewStyle;
+  imageUri?: string | null;
+  imageLoadFailed?: boolean;
+  onImagePermanentError?: () => void;
 }
 
 /**
@@ -26,7 +29,14 @@ interface PriceCardProps {
  * 우측: 현재가 + 원가 취소선(있을 때) + 비교 칩(n곳 · −savings%)
  * 하단: 가격대 진행바 (signals.minPrice vs item.price 위치 표시)
  */
-function PriceCardBase({ item, onPress, style }: PriceCardProps) {
+function PriceCardBase({
+  item,
+  onPress,
+  style,
+  imageUri,
+  imageLoadFailed = false,
+  onImagePermanentError,
+}: PriceCardProps) {
   const { priceTag, signals } = item;
   const originalPrice = priceTag.originalPrice;
   const savings =
@@ -37,12 +47,7 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
   const storeName = item.cheapestStore?.name ?? '매장';
   const registrantName = item.registrant?.nickname ?? '익명';
   const relativeTime = formatRelativeTime(item.createdAt);
-  const imageUri = fixImageUrl(item.imageUrl);
-  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
-
-  React.useEffect(() => {
-    setImageLoadFailed(false);
-  }, [imageUri]);
+  const resolvedImageUri = imageUri !== undefined ? imageUri : fixImageUrl(item.imageUrl);
 
   // 진행바: minPrice → maxPrice 사이 비율 (최저가는 0, 최고가는 1)
   // 홈에서 최저가 카드만 보이므로 현재가는 항상 minPrice (= 0% 위치).
@@ -63,13 +68,13 @@ function PriceCardBase({ item, onPress, style }: PriceCardProps) {
       accessibilityLabel={`${item.productName} ${formatPrice(item.minPrice)}원`}
     >
       <View style={styles.row}>
-        {imageUri && !imageLoadFailed ? (
+        {resolvedImageUri && !imageLoadFailed ? (
           <ResilientImage
-            uri={imageUri}
+            uri={resolvedImageUri}
             style={styles.image}
             maxRetries={1}
             retryDelayMs={120}
-            onPermanentError={() => setImageLoadFailed(true)}
+            onPermanentError={onImagePermanentError}
           />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>

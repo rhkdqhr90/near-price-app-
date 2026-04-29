@@ -30,10 +30,11 @@ import SearchIcon from '../../components/icons/SearchIcon';
 import BellIcon from '../../components/icons/BellIcon';
 import MapPinIcon from '../../components/icons/MapPinIcon';
 import ChevronDownIcon from '../../components/icons/ChevronDownIcon';
+import ChevronUpIcon from '../../components/icons/ChevronUpIcon';
 import { PriceCard } from '../../components/price/PriceCard';
 import { getPriceTagLabel } from '../../components/price/PriceTag';
 import type { ProductPriceCard } from '../../types/api.types';
-import { formatPrice, getDistanceM, formatRelativeTime } from '../../utils/format';
+import { fixImageUrl, formatPrice, getDistanceM, formatRelativeTime } from '../../utils/format';
 import { POPULAR_TAGS, DEFAULT_FLYER_STORE_NAME } from '../../utils/constants';
 
 type Props = HomeScreenProps<'Home'>;
@@ -50,6 +51,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const setRadius = useLocationStore((s) => s.setRadius);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTagIdx, setActiveTagIdx] = useState<number | null>(null);
+  const [isRadiusMenuOpen, setIsRadiusMenuOpen] = useState(false);
+  const [failedCardImages, setFailedCardImages] = useState<Record<string, string>>({});
   const listRef = useRef<FlatList>(null);
   const { data: flyersData } = useFlyers();
   const { data: unreadData } = useUnreadNotificationCount();
@@ -135,19 +138,18 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const handleCardPress = useCallback(
-    (productId: string) => {
-      const card = nearbyPrices.find((p) => p.productId === productId);
-      if (!card) return;
+    (card: ProductPriceCard) => {
       navigation.navigate('PriceDetail', {
         productId: card.productId,
         productName: card.productName,
         autoExpandTopStore: true,
       });
     },
-    [navigation, nearbyPrices],
+    [navigation],
   );
 
   const handleRefresh = useCallback(async () => {
+    setFailedCardImages({});
     setIsRefreshing(true);
     try {
       await refetchRecent();
@@ -157,8 +159,15 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   }, [refetchRecent]);
 
   const handleRadiusSelect = useCallback((nextRadius: RadiusOption) => {
+    setFailedCardImages({});
     setRadius(nextRadius);
+    setIsRadiusMenuOpen(false);
   }, [setRadius]);
+
+  const getCardKey = useCallback(
+    (item: ProductPriceCard) => `${item.productId}::${item.unitType ?? 'other'}`,
+    [],
+  );
 
   const handleNavigatePriceRegister = useCallback(() => {
     navigation
@@ -299,12 +308,35 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const renderCard = useCallback(
-    ({ item }: ListRenderItemInfo<ProductPriceCard>) => (
-      <View style={styles.cardWrap}>
-        <PriceCard item={item} onPress={handleCardPress} />
-      </View>
-    ),
-    [handleCardPress],
+    ({ item }: ListRenderItemInfo<ProductPriceCard>) => {
+      const cardKey = getCardKey(item);
+      const imageUri = fixImageUrl(item.imageUrl);
+      const imageLoadFailed = imageUri != null && failedCardImages[cardKey] === imageUri;
+
+      return (
+        <View style={styles.cardWrap}>
+          <PriceCard
+            item={item}
+            imageUri={imageUri}
+            imageLoadFailed={imageLoadFailed}
+            onImagePermanentError={() => {
+              if (!imageUri) return;
+              setFailedCardImages((prev) => {
+                if (prev[cardKey] === imageUri) {
+                  return prev;
+                }
+                return {
+                  ...prev,
+                  [cardKey]: imageUri,
+                };
+              });
+            }}
+            onPress={() => handleCardPress(item)}
+          />
+        </View>
+      );
+    },
+    [failedCardImages, getCardKey, handleCardPress],
   );
 
   return (
@@ -364,28 +396,56 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <View style={styles.radiusSelectorWrap}>
-        {RADIUS_OPTIONS.map((option) => {
-          const isActive = option === radius;
-          const label = `${Math.round(option / 1000)}km`;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => handleRadiusSelect(option)}
-              style={({ pressed }) => [
-                styles.radiusChip,
-                isActive && styles.radiusChipActive,
-                pressed && styles.radiusChipPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`반경 ${label} 설정`}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text style={[styles.radiusChipText, isActive && styles.radiusChipTextActive]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        <Pressable
+          onPress={() => setIsRadiusMenuOpen((prev) => !prev)}
+          style={({ pressed }) => [
+            styles.radiusDropdownButton,
+            pressed && styles.radiusDropdownButtonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`반경 선택, 현재 ${radiusLabel}`}
+          accessibilityState={{ expanded: isRadiusMenuOpen }}
+        >
+          <Text style={styles.radiusDropdownText}>반경 {radiusLabel}</Text>
+          {isRadiusMenuOpen ? (
+            <ChevronUpIcon size={16} color={colors.gray700} />
+          ) : (
+            <ChevronDownIcon size={16} color={colors.gray700} />
+          )}
+        </Pressable>
+
+        {isRadiusMenuOpen && (
+          <View style={styles.radiusDropdownMenu}>
+            {RADIUS_OPTIONS.map((option) => {
+              const isActive = option === radius;
+              const label = `${Math.round(option / 1000)}km`;
+
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => handleRadiusSelect(option)}
+                  style={({ pressed }) => [
+                    styles.radiusDropdownItem,
+                    isActive && styles.radiusDropdownItemActive,
+                    pressed && styles.radiusDropdownItemPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`반경 ${label} 설정`}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text
+                    style={[
+                      styles.radiusDropdownItemText,
+                      isActive && styles.radiusDropdownItemTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* ── 검색바 ── */}
@@ -427,7 +487,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
       <FlatList
         ref={listRef}
         data={feedCards}
-        keyExtractor={(item) => `${item.productId}::${item.unitType ?? 'other'}`}
+        keyExtractor={getCardKey}
         renderItem={renderCard}
         contentContainerStyle={listContentStyle}
         showsVerticalScrollIndicator={false}
@@ -455,7 +515,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 // 가격표 타입별 그라디언트 → 등록된 가격표 타입에 맞는 색상으로 히어로 카드 렌더링.
 interface HeroGradientProps {
   card: ProductPriceCard;
-  onPress: (productId: string) => void;
+  onPress: (card: ProductPriceCard) => void;
 }
 
 const HeroGradient = React.memo(({ card, onPress }: HeroGradientProps) => {
@@ -475,7 +535,7 @@ const HeroGradient = React.memo(({ card, onPress }: HeroGradientProps) => {
 
   return (
     <Pressable
-      onPress={() => onPress(card.productId)}
+      onPress={() => onPress(card)}
       style={({ pressed }) => [styles.heroWrap, pressed && styles.heroPressed]}
       accessibilityRole="button"
       accessibilityLabel={`${card.productName} 오늘의 최저가`}
@@ -619,37 +679,65 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   radiusSelectorWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    position: 'relative',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
     backgroundColor: colors.surface,
+    zIndex: 20,
   },
-  radiusChip: {
-    minWidth: 56,
+  radiusDropdownButton: {
+    minWidth: 120,
     height: spacing.touchTargetMin,
     borderRadius: spacing.radiusFull,
     borderWidth: spacing.borderThin,
     borderColor: colors.outlineVariant,
     backgroundColor: colors.white,
+    flexDirection: 'row',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  radiusChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  radiusChipPressed: {
+  radiusDropdownButtonPressed: {
     opacity: 0.82,
   },
-  radiusChipText: {
+  radiusDropdownText: {
     ...typography.captionBold,
     color: colors.gray700,
   },
-  radiusChipTextActive: {
+  radiusDropdownMenu: {
+    position: 'absolute',
+    top: spacing.touchTargetMin + spacing.xs,
+    left: spacing.lg,
+    width: 120,
+    borderRadius: spacing.radiusMd,
+    borderWidth: spacing.borderThin,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.white,
+    paddingVertical: spacing.xs,
+    shadowColor: colors.shadowBase,
+    shadowOpacity: spacing.floatShadowOpacity,
+    shadowRadius: spacing.sm,
+    shadowOffset: { width: 0, height: spacing.xs },
+    elevation: spacing.elevationSm,
+  },
+  radiusDropdownItem: {
+    height: spacing.touchTargetMin,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+  },
+  radiusDropdownItemActive: {
+    backgroundColor: colors.primary,
+  },
+  radiusDropdownItemPressed: {
+    opacity: 0.82,
+  },
+  radiusDropdownItemText: {
+    ...typography.captionBold,
+    color: colors.gray700,
+  },
+  radiusDropdownItemTextActive: {
     color: colors.white,
   },
   searchBar: {

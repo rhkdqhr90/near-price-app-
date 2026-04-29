@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 
-export const RADIUS_OPTIONS = [1000, 3000, 5000, 10000] as const;
+export const RADIUS_OPTIONS = [2000, 3000, 5000, 10000] as const;
 export type RadiusOption = (typeof RADIUS_OPTIONS)[number];
 const DEFAULT_RADIUS: RadiusOption = 3000;
 
