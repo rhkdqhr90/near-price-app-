@@ -39,6 +39,17 @@ import { POPULAR_TAGS, DEFAULT_FLYER_STORE_NAME } from '../../utils/constants';
 
 type Props = HomeScreenProps<'Home'>;
 
+const getProductCardKey = (item: ProductPriceCard): string =>
+  `${item.productId}::${item.unitType ?? 'other'}`;
+
+const hasImageUrl = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  const lowered = trimmed.toLowerCase();
+  return lowered !== 'null' && lowered !== 'undefined' && lowered !== 'nan';
+};
+
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -76,36 +87,43 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const recentPrices = useMemo(() => {
     const all = recentData?.pages.flatMap((p) => p.data) ?? [];
-    const byName = new Map<string, ProductPriceCard>();
+    const byProduct = new Map<string, ProductPriceCard>();
 
     for (const item of all) {
       if (!item.productName || typeof item.productName !== 'string') {
         continue;
       }
 
-      const key = `${item.productName.trim().toLowerCase()}::${item.unitType ?? 'other'}`;
-      const current = byName.get(key);
+      const key = getProductCardKey(item);
+      const current = byProduct.get(key);
 
       if (!current) {
-        byName.set(key, item);
+        byProduct.set(key, item);
         continue;
       }
 
       if (item.minPrice < current.minPrice) {
-        byName.set(key, item);
+        byProduct.set(key, item);
         continue;
       }
 
       if (item.minPrice === current.minPrice) {
+        const currentHasImage = hasImageUrl(current.imageUrl);
+        const itemHasImage = hasImageUrl(item.imageUrl);
+        if (itemHasImage && !currentHasImage) {
+          byProduct.set(key, item);
+          continue;
+        }
+
         const currentTs = new Date(current.createdAt).getTime();
         const itemTs = new Date(item.createdAt).getTime();
         if (itemTs > currentTs) {
-          byName.set(key, item);
+          byProduct.set(key, item);
         }
       }
     }
 
-    return Array.from(byName.values()).sort(
+    return Array.from(byProduct.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }, [recentData]);
@@ -165,7 +183,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   }, [setRadius]);
 
   const getCardKey = useCallback(
-    (item: ProductPriceCard) => `${item.productId}::${item.unitType ?? 'other'}`,
+    (item: ProductPriceCard) => getProductCardKey(item),
     [],
   );
 
