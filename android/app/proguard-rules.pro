@@ -81,8 +81,6 @@
     **[] $VALUES;
     public *;
 }
--keepresourcexmlelements manifest/application/meta-data@value=GlideModule
-
 # @d11/react-native-fast-image — 패키지 namespace는 d11 포크에서도 com.dylanvann.fastimage 유지.
 -keep class com.dylanvann.fastimage.** { *; }
 
