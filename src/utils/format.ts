@@ -8,6 +8,15 @@ const INVALID_URL_LITERALS = new Set(['null', 'undefined', 'nan', 'none', 'n/a']
  * - 로컬/LAN 주소 (에뮬레이터 10.0.2.2, localhost, 192.168.x.x 등) → API_BASE_URL로 교체
  * - 상대 경로 → API_BASE_URL 앞에 붙이기
  * - 포트 없는 외부 CDN URL은 교체하지 않음
+ *
+ * TODO(운영 전 제거 대상): DB에 개발 환경 URL(localhost/LAN)이 섞여 저장된 과거 데이터를
+ * 보정하기 위한 임시 처치. 운영 데이터는 모두 CloudFront 절대 URL로 정규화되어 있으므로
+ * 이 함수가 실제로 rewrite를 수행하는 건 dev 환경 잔존 데이터뿐이다.
+ *   해제 조건:
+ *   1) 백엔드 normalizeImageUrl이 항상 CloudFront 절대 URL만 반환함을 확인
+ *   2) 운영 DB에서 dev URL을 가진 row를 정리(또는 imageUrl null 처리)
+ *   3) QA에서 fixImageUrl 호출 없이 모든 이미지 정상 표시 확인
+ * 위 3개 충족 후 이 함수 삭제 + 호출부를 item.imageUrl 직접 사용으로 교체할 것.
  */
 export const fixImageUrl = (url: string | null | undefined): string | null => {
   if (url == null) return null;

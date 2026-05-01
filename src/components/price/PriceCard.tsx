@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -17,9 +17,6 @@ interface PriceCardProps {
   item: ProductPriceCard;
   onPress?: (productId: string) => void;
   style?: ViewStyle;
-  imageUri?: string | null;
-  imageLoadFailed?: boolean;
-  onImagePermanentError?: () => void;
 }
 
 /**
@@ -33,9 +30,6 @@ function PriceCardBase({
   item,
   onPress,
   style,
-  imageUri,
-  imageLoadFailed = false,
-  onImagePermanentError,
 }: PriceCardProps) {
   const { priceTag, signals } = item;
   const originalPrice = priceTag.originalPrice;
@@ -47,7 +41,14 @@ function PriceCardBase({
   const storeName = item.cheapestStore?.name ?? '매장';
   const registrantName = item.registrant?.nickname ?? '익명';
   const relativeTime = formatRelativeTime(item.createdAt);
-  const resolvedImageUri = imageUri !== undefined ? imageUri : fixImageUrl(item.imageUrl);
+  const resolvedImageUri = fixImageUrl(item.imageUrl);
+
+  // 이미지 로드 실패는 카드 자체의 UI 상태로 격리. 화면(HomeScreen)이 알 필요 없음.
+  // URL이 바뀌면(다른 상품 카드로 재사용 등) 실패 플래그 초기화.
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [resolvedImageUri]);
 
   // 진행바: minPrice → maxPrice 사이 비율 (최저가는 0, 최고가는 1)
   // 홈에서 최저가 카드만 보이므로 현재가는 항상 minPrice (= 0% 위치).
@@ -72,9 +73,7 @@ function PriceCardBase({
           <ResilientImage
             uri={resolvedImageUri}
             style={styles.image}
-            maxRetries={1}
-            retryDelayMs={120}
-            onPermanentError={onImagePermanentError}
+            onPermanentError={() => setImageLoadFailed(true)}
           />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>

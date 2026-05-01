@@ -5,15 +5,17 @@ import FastImage, {
 } from '@d11/react-native-fast-image';
 
 /**
- * 네트워크 이미지 로딩에 재시도 + 영구 실패 콜백을 얹은 래퍼.
+ * 네트워크 이미지 로딩에 영구 실패 콜백을 얹은 FastImage 래퍼.
  *
  * 내부 라이브러리: `@d11/react-native-fast-image` (Dream11/DS Horizon 포크, New Arch 지원)
  *  - 메모리 + 디스크 캐시 (cacheControl: immutable)
  *  - FlatList 가상화로 언마운트 후 재진입해도 캐시 히트 → 깜빡임 제거
  *  - Fabric / TurboModules 호환
  *
- * RN 기본 `<Image>`는 캐시가 약해 같은 URL에도 재요청이 빈번 → 홈 카드에서 흰 화면 깜빡임.
- * 그 문제 해결을 위한 교체.
+ * 재시도 정책:
+ *  - 기본 `maxRetries=0` (재시도 없음). 이미지 사이즈가 백엔드에서 압축되어 있어
+ *    첫 fetch가 거의 항상 성공하며, 영구 오류(404, 잘못된 URL)에 retry는 의미 없음.
+ *  - 일시적 네트워크 실패 케이스에서만 호출처가 명시적으로 maxRetries를 지정.
  */
 interface ResilientImageProps extends Omit<FastImageProps, 'source' | 'onError'> {
   uri: string;
@@ -24,8 +26,8 @@ interface ResilientImageProps extends Omit<FastImageProps, 'source' | 'onError'>
 
 const ResilientImage: React.FC<ResilientImageProps> = ({
   uri,
-  maxRetries = 2,
-  retryDelayMs = 150,
+  maxRetries = 0,
+  retryDelayMs = 300,
   onPermanentError,
   ...rest
 }) => {

@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Linking, Dimensions, Image, type LayoutChangeEvent } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Linking, Image, type LayoutChangeEvent } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ImageEditor from '@react-native-community/image-editor';
@@ -95,44 +95,44 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
       const sourceUri = `file://${snapshot.path}`;
 
       let imageUri = sourceUri;
-      try {
-        // 스냅샷의 실제 픽셀 dimensions를 읽는다 (preview view를 GPU 스크린샷한 결과).
-        const { width: snapW, height: snapH } = await new Promise<{
-          width: number;
-          height: number;
-        }>((resolve, reject) => {
-          Image.getSize(sourceUri, (w, h) => resolve({ width: w, height: h }), reject);
-        });
-
-        // 가이드 프레임이 그려지는 화면 영역의 실제 크기.
-        const fallback = Dimensions.get('window');
-        const layoutW = containerLayoutRef.current?.width ?? fallback.width;
-        const layoutH = containerLayoutRef.current?.height ?? fallback.height;
-
-        // 스냅샷은 화면 비율과 동일하므로 cover-crop 보정 불필요.
-        // 가이드 프레임의 화면 비율을 그대로 스냅샷 픽셀로 환산하여 중앙 영역을 잘라낸다.
-        const cropW = Math.round(snapW * (spacing.cameraGuideFrameW / layoutW));
-        const cropH = Math.round(snapH * (spacing.cameraGuideFrameH / layoutH));
-        const cropX = Math.round((snapW - cropW) / 2);
-        const cropY = Math.round((snapH - cropH) / 2);
-
-        const safeX = Math.max(0, cropX);
-        const safeY = Math.max(0, cropY);
-        const cropped = await ImageEditor.cropImage(sourceUri, {
-          offset: { x: safeX, y: safeY },
-          size: {
-            width: Math.min(cropW, snapW - safeX),
-            height: Math.min(cropH, snapH - safeY),
-          },
-          format: 'jpeg',
-        });
-        imageUri = cropped.uri;
-      } catch (cropError) {
-        // 크롭 실패 → 원본 스냅샷 사용 (스냅샷 자체는 성공했으므로 흐름 유지)
-        if (!__DEV__) {
-          Sentry.captureException(cropError, {
-            tags: { screen: 'CameraScreen', action: 'cropSnapshot' },
+      // onLayout 미발생 시 크롭 좌표가 부정확해질 수 있으므로 크롭 자체를 스킵하고 원본 사용.
+      // (Dimensions.get('window')으로 폴백하면 시스템바/헤더 영향으로 좌표 어긋날 가능성)
+      const layout = containerLayoutRef.current;
+      if (layout) {
+        try {
+          // 스냅샷의 실제 픽셀 dimensions를 읽는다 (preview view를 GPU 스크린샷한 결과).
+          const { width: snapW, height: snapH } = await new Promise<{
+            width: number;
+            height: number;
+          }>((resolve, reject) => {
+            Image.getSize(sourceUri, (w, h) => resolve({ width: w, height: h }), reject);
           });
+
+          // 스냅샷은 화면 비율과 동일하므로 cover-crop 보정 불필요.
+          // 가이드 프레임의 화면 비율을 그대로 스냅샷 픽셀로 환산하여 중앙 영역을 잘라낸다.
+          const cropW = Math.round(snapW * (spacing.cameraGuideFrameW / layout.width));
+          const cropH = Math.round(snapH * (spacing.cameraGuideFrameH / layout.height));
+          const cropX = Math.round((snapW - cropW) / 2);
+          const cropY = Math.round((snapH - cropH) / 2);
+
+          const safeX = Math.max(0, cropX);
+          const safeY = Math.max(0, cropY);
+          const cropped = await ImageEditor.cropImage(sourceUri, {
+            offset: { x: safeX, y: safeY },
+            size: {
+              width: Math.min(cropW, snapW - safeX),
+              height: Math.min(cropH, snapH - safeY),
+            },
+            format: 'jpeg',
+          });
+          imageUri = cropped.uri;
+        } catch (cropError) {
+          // 크롭 실패 → 원본 스냅샷 사용 (스냅샷 자체는 성공했으므로 흐름 유지)
+          if (!__DEV__) {
+            Sentry.captureException(cropError, {
+              tags: { screen: 'CameraScreen', action: 'cropSnapshot' },
+            });
+          }
         }
       }
 

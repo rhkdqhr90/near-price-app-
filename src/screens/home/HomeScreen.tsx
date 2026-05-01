@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ import ChevronUpIcon from '../../components/icons/ChevronUpIcon';
 import { PriceCard } from '../../components/price/PriceCard';
 import { getPriceTagLabel } from '../../components/price/PriceTag';
 import type { ProductPriceCard } from '../../types/api.types';
-import { fixImageUrl, formatPrice, getDistanceM, formatRelativeTime } from '../../utils/format';
+import { formatPrice, getDistanceM, formatRelativeTime } from '../../utils/format';
 import { POPULAR_TAGS, DEFAULT_FLYER_STORE_NAME } from '../../utils/constants';
 
 type Props = HomeScreenProps<'Home'>;
@@ -50,8 +50,6 @@ const hasImageUrl = (value: unknown): boolean => {
   return lowered !== 'null' && lowered !== 'undefined' && lowered !== 'nan';
 };
 
-const IMAGE_FAILURE_RETRY_MS = 20_000;
-
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -65,8 +63,6 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTagIdx, setActiveTagIdx] = useState<number | null>(null);
   const [isRadiusMenuOpen, setIsRadiusMenuOpen] = useState(false);
-  const [failedCardImages, setFailedCardImages] = useState<Record<string, string>>({});
-  const failedImageRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const listRef = useRef<FlatList>(null);
   const { data: flyersData } = useFlyers();
   const { data: unreadData } = useUnreadNotificationCount();
@@ -169,40 +165,19 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     [navigation],
   );
 
-  const clearFailedImageRetryTimers = useCallback(() => {
-    const timers = failedImageRetryTimersRef.current;
-    for (const timer of Object.values(timers)) {
-      clearTimeout(timer);
-    }
-    failedImageRetryTimersRef.current = {};
-  }, []);
-
-  const resetFailedCardImages = useCallback(() => {
-    clearFailedImageRetryTimers();
-    setFailedCardImages({});
-  }, [clearFailedImageRetryTimers]);
-
-  useEffect(() => {
-    return () => {
-      clearFailedImageRetryTimers();
-    };
-  }, [clearFailedImageRetryTimers]);
-
   const handleRefresh = useCallback(async () => {
-    resetFailedCardImages();
     setIsRefreshing(true);
     try {
       await refetchRecent();
     } finally {
       setIsRefreshing(false);
     }
-  }, [refetchRecent, resetFailedCardImages]);
+  }, [refetchRecent]);
 
   const handleRadiusSelect = useCallback((nextRadius: RadiusOption) => {
-    resetFailedCardImages();
     setRadius(nextRadius);
     setIsRadiusMenuOpen(false);
-  }, [resetFailedCardImages, setRadius]);
+  }, [setRadius]);
 
   const getCardKey = useCallback(
     (item: ProductPriceCard) => getProductCardKey(item),
@@ -348,54 +323,12 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const renderCard = useCallback(
-    ({ item }: ListRenderItemInfo<ProductPriceCard>) => {
-      const cardKey = getCardKey(item);
-      const imageUri = fixImageUrl(item.imageUrl);
-      const imageLoadFailed = imageUri != null && failedCardImages[cardKey] === imageUri;
-
-      return (
-        <View style={styles.cardWrap}>
-          <PriceCard
-            item={item}
-            imageUri={imageUri}
-            imageLoadFailed={imageLoadFailed}
-            onImagePermanentError={() => {
-              if (!imageUri) return;
-              setFailedCardImages((prev) => {
-                if (prev[cardKey] === imageUri) {
-                  return prev;
-                }
-                return {
-                  ...prev,
-                  [cardKey]: imageUri,
-                };
-              });
-
-              const prevTimer = failedImageRetryTimersRef.current[cardKey];
-              if (prevTimer) {
-                clearTimeout(prevTimer);
-              }
-
-              failedImageRetryTimersRef.current[cardKey] = setTimeout(() => {
-                setFailedCardImages((prev) => {
-                  if (prev[cardKey] !== imageUri) {
-                    return prev;
-                  }
-
-                  const next = { ...prev };
-                  delete next[cardKey];
-                  return next;
-                });
-
-                delete failedImageRetryTimersRef.current[cardKey];
-              }, IMAGE_FAILURE_RETRY_MS);
-            }}
-            onPress={() => handleCardPress(item)}
-          />
-        </View>
-      );
-    },
-    [failedCardImages, getCardKey, handleCardPress],
+    ({ item }: ListRenderItemInfo<ProductPriceCard>) => (
+      <View style={styles.cardWrap}>
+        <PriceCard item={item} onPress={() => handleCardPress(item)} />
+      </View>
+    ),
+    [handleCardPress],
   );
 
   return (
