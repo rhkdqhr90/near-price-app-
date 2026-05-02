@@ -64,6 +64,7 @@ const RootNavigator: React.FC = () => {
           nickname: me.nickname,
           profileImageUrl: me.profileImageUrl,
           trustScore: me.trustScore,
+          representativeBadge: me.representativeBadge,
         });
       } catch {
         // 프로필 동기화 실패는 치명적 오류가 아니므로 무시

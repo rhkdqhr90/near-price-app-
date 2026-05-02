@@ -3,7 +3,7 @@
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
-  user: Pick<UserResponse, 'id' | 'email' | 'nickname' | 'profileImageUrl' | 'trustScore'>;
+  user: Pick<UserResponse, 'id' | 'email' | 'nickname' | 'profileImageUrl' | 'trustScore' | 'representativeBadge'>;
 }
 
 export interface KakaoLoginDto {
@@ -18,6 +18,15 @@ export type RefreshTokenResponse = Pick<AuthTokens, 'accessToken' | 'refreshToke
 
 // ─── User ──────────────────────────────────────────────────────────────────
 
+/**
+ * 사용자가 BadgeScreen에서 선택한 대표 뱃지. 작성자 닉네임 옆에 표시된다.
+ * 백엔드 BadgeDefinition.id (`masil_1` ~ `masil_23`)를 type으로 둔다.
+ */
+export interface RepresentativeBadge {
+  type: string;
+  name: string;
+}
+
 export interface UserResponse {
   id: string;
   email: string;
@@ -28,6 +37,7 @@ export interface UserResponse {
   trustScore: number;
   notifPriceChange: boolean;
   notifPromotion: boolean;
+  representativeBadge: RepresentativeBadge | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,8 +50,16 @@ export interface PublicUserResponse {
   trustScore: number;
   notifPriceChange: boolean;
   notifPromotion: boolean;
+  representativeBadge: RepresentativeBadge | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * 대표 뱃지 변경 요청. null을 보내면 해제.
+ */
+export interface SetRepresentativeBadgeDto {
+  type: string | null;
 }
 
 export interface UpdateNicknameDto {
@@ -651,7 +669,11 @@ export interface ProductPriceCard {
   hasClosingDiscount: boolean;
   verificationCount: number;
   createdAt: string;
-  registrant: { nickname: string; profileImageUrl: string | null } | null;
+  registrant: {
+    nickname: string;
+    profileImageUrl: string | null;
+    representativeBadge: RepresentativeBadge | null;
+  } | null;
   // ── 가격표(PriceTag) 시스템 ──
   priceTag: PriceTag;
   signals: PriceSignals;

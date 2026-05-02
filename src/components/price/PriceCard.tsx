@@ -12,6 +12,7 @@ import { fixImageUrl, formatPrice, formatRelativeTime } from '../../utils/format
 import type { ProductPriceCard } from '../../types/api.types';
 import { PriceTag } from './PriceTag';
 import ResilientImage from '../common/ResilientImage';
+import InlineBadge from '../badges/InlineBadge';
 
 interface PriceCardProps {
   item: ProductPriceCard;
@@ -95,10 +96,19 @@ function PriceCardBase({
             {storeName} · {relativeTime}
           </Text>
 
-          <Text style={styles.contributor} numberOfLines={1}>
-            @{registrantName}
-            {signals.isLowest7d ? '  ·  7일 내 최저' : ''}
-          </Text>
+          <View style={styles.contributorRow}>
+            {item.registrant?.representativeBadge ? (
+              <InlineBadge
+                type={item.registrant.representativeBadge.type}
+                size={16}
+                style={styles.contributorBadge}
+              />
+            ) : null}
+            <Text style={styles.contributor} numberOfLines={1}>
+              @{registrantName}
+              {signals.isLowest7d ? '  ·  7일 내 최저' : ''}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.priceCol}>
@@ -204,7 +214,16 @@ const styles = StyleSheet.create({
   contributor: {
     ...typography.caption,
     fontFamily: PJS.medium,
+    flexShrink: 1,
+  },
+  contributorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: spacing.xs,
     marginTop: spacing.cardTextGap,
+  },
+  contributorBadge: {
+    marginRight: 2,
   },
   priceCol: {
     alignItems: 'flex-end',
