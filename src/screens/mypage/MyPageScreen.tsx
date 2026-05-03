@@ -34,6 +34,7 @@ import DocumentIcon from '../../components/icons/DocumentIcon';
 import HelpCircleIcon from '../../components/icons/HelpCircleIcon';
 import CheckIcon from '../../components/icons/CheckIcon';
 import StoreIcon from '../../components/icons/StoreIcon';
+import InlineBadge from '../../components/badges/InlineBadge';
 import { APP_VERSION } from '../../utils/config';
 import { isAxiosError, isCancel } from '../../api/client';
 import { colors } from '../../theme/colors';
@@ -757,7 +758,7 @@ const MyPageScreen: React.FC<Props> = ({ navigation }) => {
                         styles.badgeIconWrap,
                         item.kind === 'earned' ? styles.badgeIconWrapEarned : styles.badgeIconWrapProgress,
                       ]}>
-                        <Text style={styles.badgeIcon}>{item.data.icon}</Text>
+                        <InlineBadge type={item.data.type} size={36} />
                       </View>
                       <View>
                         <Text style={styles.badgeName}>{item.data.name}</Text>

@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isAxiosError } from '../../api/client';
 import LoadingView from '../../components/common/LoadingView';
 import ErrorView from '../../components/common/ErrorView';
 import type { MyPageScreenProps } from '../../navigation/types';
@@ -84,7 +85,15 @@ const BadgeScreen: React.FC<Props> = ({ navigation }) => {
       const next = isCurrent ? null : type;
       setRepresentativeBadgeMutation.mutate(next, {
         onError: (err) => {
-          Alert.alert('오류', '대표 뱃지 설정에 실패했어요.');
+          // 서버 메시지(쿨다운 안내 등)를 그대로 노출 — 1시간 제한 정책 사용자에게 명확히 전달
+          const serverMessage =
+            isAxiosError(err) && typeof err.response?.data === 'object'
+              ? ((err.response.data as { message?: string | string[] }).message)
+              : undefined;
+          const text = Array.isArray(serverMessage)
+            ? serverMessage.join('\n')
+            : (serverMessage ?? '대표 뱃지 설정에 실패했어요.');
+          Alert.alert('알림', text);
           if (__DEV__) {
             // eslint-disable-next-line no-console
             console.warn('setRepresentativeBadge error', err);

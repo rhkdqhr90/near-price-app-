@@ -38,6 +38,8 @@ export interface UserResponse {
   notifPriceChange: boolean;
   notifPromotion: boolean;
   representativeBadge: RepresentativeBadge | null;
+  /** 대표 뱃지 마지막 변경 시각(ISO). 1시간 쿨다운 카운트다운에 사용. */
+  representativeBadgeChangedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
