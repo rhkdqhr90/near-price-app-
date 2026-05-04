@@ -87,6 +87,10 @@ export type PriceRegisterStackParamList = {
     imageFileName?: string;
     imageMimeType?: string;
     imageFileSize?: number;
+    // 카메라 화면에서 가이드 박스가 차지한 비율 (0~1).
+    // OcrResult가 원본 이미지에서 동일 비율로 가이드 영역을 재구성해
+    // ML Kit 텍스트 블록 frame 과 교차 검사한다. 갤러리에서 선택한 경우 미설정.
+    guideRatio?: { widthRatio: number; heightRatio: number };
   };
   ItemDetail: {
     imageUri?: string;

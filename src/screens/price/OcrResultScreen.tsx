@@ -1,10 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, Platform,
+  StyleSheet, Platform, type LayoutChangeEvent,
 } from 'react-native';
 import * as Sentry from '@sentry/react-native';
-import TextRecognition, { TextRecognitionScript } from '@react-native-ml-kit/text-recognition';
+import TextRecognition, {
+  TextRecognitionScript,
+  type Frame,
+  type TextBlock,
+} from '@react-native-ml-kit/text-recognition';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import LoadingView from '../../components/common/LoadingView';
 import ErrorView from '../../components/common/ErrorView';
@@ -14,7 +18,30 @@ import { typography } from '../../theme/typography';
 
 type Props = PriceRegisterScreenProps<'OcrResult'>;
 
-interface OcrItem { name: string; price: string; }
+interface OcrItem { name: string; price: string; frame?: Frame }
+
+interface ImageSize { width: number; height: number; }
+
+// 두 사각형의 교차 비율(a 기준). 0~1.
+// 텍스트 블록이 가이드 영역에 얼마나 들어와 있는지 판정한다.
+const intersectionRatio = (a: Frame, b: Frame): number => {
+  const x1 = Math.max(a.left, b.left);
+  const y1 = Math.max(a.top, b.top);
+  const x2 = Math.min(a.left + a.width, b.left + b.width);
+  const y2 = Math.min(a.top + a.height, b.top + b.height);
+  if (x2 <= x1 || y2 <= y1) return 0;
+  const aArea = a.width * a.height;
+  return aArea > 0 ? ((x2 - x1) * (y2 - y1)) / aArea : 0;
+};
+
+// 가이드 영역 안에 50% 이상 들어와 있는 블록만 채택한다.
+// guideBox 가 null 이면(갤러리 선택 등) 전체 블록 사용.
+const filterBlocksByGuide = (blocks: TextBlock[], guideBox: Frame | null): TextBlock[] => {
+  if (!guideBox) return blocks;
+  return blocks.filter(
+    (b) => b.frame !== undefined && intersectionRatio(b.frame, guideBox) >= 0.5,
+  );
+};
 
 const normalizeImageUri = (uri: string): string => {
   if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('http')) {
@@ -70,13 +97,13 @@ interface RankedCandidate {
   hasComma: boolean;
 }
 
-// 가격표 한 장에는 보통 상품 1개만 있으므로(영수증 멀티 상품 시나리오는 미지원),
-// 라인별 후보를 수집한 뒤 "원/₩ 마커 → 콤마 → 큰 값" 신뢰도 순으로 최상위 1개만 반환한다.
-// 사용자가 틀렸다고 판단하면 화면 하단 "직접 입력" 버튼 사용.
-const parseOcrText = (text: string): OcrItem[] => {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const candidates: RankedCandidate[] = [];
-
+// 한 라인에서 후보를 추출하고 candidates 배열에 push 하는 공통 로직.
+// blocks 기반/텍스트 기반 두 경로에서 모두 사용한다.
+const collectLineCandidates = (
+  lines: string[],
+  candidates: Array<RankedCandidate & { frame?: Frame }>,
+  blockFrame?: Frame,
+): void => {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const best = pickBestPrice(line);
@@ -96,44 +123,103 @@ const parseOcrText = (text: string): OcrItem[] => {
       num: best.num,
       hasMarker: best.hasMarker,
       hasComma: best.hasComma,
+      frame: blockFrame,
     });
   }
+};
 
-  if (candidates.length === 0) { return []; }
-
-  candidates.sort((a, b) => {
+const sortCandidates = (
+  candidates: Array<RankedCandidate & { frame?: Frame }>,
+): Array<RankedCandidate & { frame?: Frame }> => {
+  return candidates.sort((a, b) => {
     if (a.hasMarker !== b.hasMarker) { return a.hasMarker ? -1 : 1; }
     if (a.hasComma !== b.hasComma) { return a.hasComma ? -1 : 1; }
     return b.num - a.num;
   });
+};
 
-  return [{ name: candidates[0].name, price: candidates[0].price }];
+// 가격표 한 장에는 보통 상품 1개만 있으므로(영수증 멀티 상품 시나리오는 미지원),
+// 라인별 후보를 수집한 뒤 "원/₩ 마커 → 콤마 → 큰 값" 신뢰도 순으로 최상위 1개만 반환한다.
+// 사용자가 틀렸다고 판단하면 화면 하단 "직접 입력" 버튼 사용.
+//
+// blocks 기반: 가이드 영역 필터링 후 통과한 블록의 텍스트만 후보로 삼는다.
+// 각 후보에 원본 블록의 frame 을 매달아 시각화에 사용한다.
+const parseOcrBlocks = (blocks: TextBlock[]): OcrItem[] => {
+  const candidates: Array<RankedCandidate & { frame?: Frame }> = [];
+  for (const block of blocks) {
+    const lines = block.text.split('\n').map(l => l.trim()).filter(Boolean);
+    collectLineCandidates(lines, candidates, block.frame);
+  }
+  if (candidates.length === 0) { return []; }
+  const sorted = sortCandidates(candidates);
+  return [{ name: sorted[0].name, price: sorted[0].price, frame: sorted[0].frame }];
+};
+
+// 텍스트 기반 폴백 — 블록 frame이 모두 누락된 케이스에 사용.
+const parseOcrText = (text: string): OcrItem[] => {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const candidates: Array<RankedCandidate & { frame?: Frame }> = [];
+  collectLineCandidates(lines, candidates);
+  if (candidates.length === 0) { return []; }
+  const sorted = sortCandidates(candidates);
+  return [{ name: sorted[0].name, price: sorted[0].price }];
 };
 
 const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { imageUri, imageFileName, imageMimeType, imageFileSize } = route.params;
+  const { imageUri, imageFileName, imageMimeType, imageFileSize, guideRatio } = route.params;
   const [ocrItems, setOcrItems] = useState<OcrItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [rawText, setRawText] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  const [imageNativeSize, setImageNativeSize] = useState<ImageSize | null>(null);
+  const [imageDisplaySize, setImageDisplaySize] = useState<ImageSize | null>(null);
+
+  const handleImageLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setImageDisplaySize({ width, height });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
     setIsError(false);
     setOcrItems([]);
+    setImageNativeSize(null);
     (async () => {
       try {
+        const normalizedUri = normalizeImageUri(imageUri);
         // 한글 가격표 인식을 위해 KOREAN 스크립트 사용
         // (KOREAN 모델은 한글 + 라틴 문자 + 숫자 모두 인식 가능)
-        const result = await TextRecognition.recognize(
-          normalizeImageUri(imageUri),
-          TextRecognitionScript.KOREAN,
-        );
+        // 이미지 native dimensions 와 OCR 을 병렬 처리.
+        const [result, dimensions] = await Promise.all([
+          TextRecognition.recognize(normalizedUri, TextRecognitionScript.KOREAN),
+          new Promise<ImageSize>((resolve, reject) => {
+            Image.getSize(normalizedUri, (w, h) => resolve({ width: w, height: h }), reject);
+          }),
+        ]);
         if (cancelled) return;
         setRawText(result.text);
-        setOcrItems(parseOcrText(result.text));
+        setImageNativeSize(dimensions);
+
+        // 가이드 영역(픽셀) 계산 — guideRatio 가 있으면 중앙 비율 영역, 없으면 전체.
+        const guideBox: Frame | null = guideRatio
+          ? {
+              width: dimensions.width * guideRatio.widthRatio,
+              height: dimensions.height * guideRatio.heightRatio,
+              left: (dimensions.width * (1 - guideRatio.widthRatio)) / 2,
+              top: (dimensions.height * (1 - guideRatio.heightRatio)) / 2,
+            }
+          : null;
+
+        const blocksInGuide = filterBlocksByGuide(result.blocks, guideBox);
+        // 가이드 영역 내 블록에서 가격 후보를 우선 추출.
+        // 후보가 없으면(블록 frame 누락 등) 텍스트 기반 폴백.
+        let items = parseOcrBlocks(blocksInGuide);
+        if (items.length === 0) {
+          items = parseOcrText(result.text);
+        }
+        setOcrItems(items);
       } catch (error) {
         Sentry.captureException(error, {
           tags: {
@@ -147,7 +233,46 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [imageUri, retryCount]);
+  }, [imageUri, retryCount, guideRatio]);
+
+  // 이미지 native pixel 좌표를 contain 모드로 그려진 화면 dp 좌표로 변환한다.
+  const projectFrameToScreen = useCallback(
+    (frame: Frame): { left: number; top: number; width: number; height: number } | null => {
+      if (!imageNativeSize || !imageDisplaySize) return null;
+      const scale = Math.min(
+        imageDisplaySize.width / imageNativeSize.width,
+        imageDisplaySize.height / imageNativeSize.height,
+      );
+      const renderedW = imageNativeSize.width * scale;
+      const renderedH = imageNativeSize.height * scale;
+      const offsetX = (imageDisplaySize.width - renderedW) / 2;
+      const offsetY = (imageDisplaySize.height - renderedH) / 2;
+      return {
+        left: frame.left * scale + offsetX,
+        top: frame.top * scale + offsetY,
+        width: frame.width * scale,
+        height: frame.height * scale,
+      };
+    },
+    [imageNativeSize, imageDisplaySize],
+  );
+
+  const guideOverlayBox = useMemo(() => {
+    if (!guideRatio || !imageNativeSize) return null;
+    const guideFrame: Frame = {
+      width: imageNativeSize.width * guideRatio.widthRatio,
+      height: imageNativeSize.height * guideRatio.heightRatio,
+      left: (imageNativeSize.width * (1 - guideRatio.widthRatio)) / 2,
+      top: (imageNativeSize.height * (1 - guideRatio.heightRatio)) / 2,
+    };
+    return projectFrameToScreen(guideFrame);
+  }, [guideRatio, imageNativeSize, projectFrameToScreen]);
+
+  const highlightBoxes = useMemo(() => {
+    return ocrItems
+      .map((item) => (item.frame ? projectFrameToScreen(item.frame) : null))
+      .filter((box): box is { left: number; top: number; width: number; height: number } => box !== null);
+  }, [ocrItems, projectFrameToScreen]);
 
   const handleRetry = useCallback(() => {
     setRetryCount(c => c + 1);
@@ -178,7 +303,30 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: normalizeImageUri(imageUri) }} style={styles.image} resizeMode="contain" accessibilityRole="image" accessibilityLabel="촬영한 가격표 이미지" />
+      <View style={styles.imageWrap} onLayout={handleImageLayout}>
+        <Image
+          source={{ uri: normalizeImageUri(imageUri) }}
+          style={styles.image}
+          resizeMode="contain"
+          accessibilityRole="image"
+          accessibilityLabel="촬영한 가격표 이미지"
+        />
+        {guideOverlayBox ? (
+          <View
+            style={[styles.guideOverlay, guideOverlayBox]}
+            pointerEvents="none"
+            accessibilityElementsHidden
+          />
+        ) : null}
+        {highlightBoxes.map((box, idx) => (
+          <View
+            key={`hl-${idx}`}
+            style={[styles.highlightOverlay, box]}
+            pointerEvents="none"
+            accessibilityElementsHidden
+          />
+        ))}
+      </View>
 
       <ScrollView style={styles.resultScroll} contentContainerStyle={styles.resultSection}>
         <Text style={styles.sectionTitle}>인식된 가격 항목</Text>
@@ -223,7 +371,21 @@ const OcrResultScreen: React.FC<Props> = ({ navigation, route }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.gray100 },
-  image: { width: '100%', height: spacing.imagePreviewH, backgroundColor: colors.black },
+  imageWrap: { width: '100%', height: spacing.imagePreviewH, backgroundColor: colors.black },
+  image: { width: '100%', height: '100%' },
+  guideOverlay: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.white,
+    opacity: 0.7,
+  },
+  highlightOverlay: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '22',
+  },
   resultScroll: { flex: 1 },
   resultSection: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   sectionTitle: { ...typography.headingLg, marginBottom: spacing.md },
