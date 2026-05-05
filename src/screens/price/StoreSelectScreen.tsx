@@ -16,14 +16,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Geolocation from 'react-native-geolocation-service';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
-import type { CreateStoreDto, StoreType, NearbyStoreResponse } from '../../types/api.types';
+import type { NearbyStoreResponse } from '../../types/api.types';
 import { useLocationStore } from '../../store/locationStore';
 import { usePriceRegisterStore } from '../../store/priceRegisterStore';
 import { useNearbyStores } from '../../hooks/queries/useNearbyStores';
-import { useNaverPlaceSearch, type NaverPlaceDocument } from '../../hooks/queries/useNaverPlaceSearch';
-import { useReverseGeocode } from '../../hooks/queries/useLocation';
 import { storeApi } from '../../api/store.api';
-import { isAxiosError } from '../../api/client';
 import { STALE_TIME } from '../../lib/queryClient';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import {
@@ -44,49 +41,8 @@ import { typography, PJS } from '../../theme/typography';
 import { DEFAULT_LATITUDE, DEFAULT_LONGITUDE } from '../../utils/constants';
 import { useDebounce } from '../../hooks/useDebounce';
 import { getStoreCategoryColors } from '../../utils/storeCategory';
-import { getDistanceM } from '../../utils/format';
 
-// ─── 네이버 카테고리 → StoreType 추론 ─────────────────────────────────────────
-const inferStoreType = (category: string): StoreType => {
-  const cat = category.toLowerCase();
-  if (cat.includes('편의점')) return 'convenience';
-  if (cat.includes('대형마트') || cat.includes('이마트') || cat.includes('코스트코') || cat.includes('홈플러스')) return 'large_mart';
-  if (cat.includes('시장') || cat.includes('재래시장')) return 'traditional_market';
-  if (cat.includes('슈퍼')) return 'supermarket';
-  return 'mart';
-};
-
-const normalizeRegionHint = (value?: string | null): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (/^(현재\s*위치|내\s*위치)$/.test(trimmed)) return null;
-  return trimmed;
-};
-
-const parseNaverCoords = (
-  place: NaverPlaceDocument,
-): { latitude: number; longitude: number } | null => {
-  const latitude = parseFloat(place.y);
-  const longitude = parseFloat(place.x);
-  if (isNaN(latitude) || isNaN(longitude)) return null;
-  return { latitude, longitude };
-};
-
-const getDistanceFromOrigin = (
-  originLatitude: number | null,
-  originLongitude: number | null,
-  targetLatitude: number,
-  targetLongitude: number,
-): number | null => {
-  const distance = getDistanceM(
-    originLatitude,
-    originLongitude,
-    targetLatitude,
-    targetLongitude,
-  );
-  if (!Number.isFinite(distance)) return null;
-  return Math.round(distance);
-};
+// 자체 DB 의 좌표+키워드 결합 검색을 사용하므로 네이버 카테고리 추론/매장 등록 헬퍼는 더 이상 필요 없다.
 
 type Props = PriceRegisterScreenProps<'StoreSelect'>;
 
@@ -103,23 +59,13 @@ type SearchOrigin =
   | { source: 'gps'; latitude: number; longitude: number }
   | { source: 'region'; latitude: number; longitude: number };
 
-/** 선택된 매장 — DB 매장이거나 네이버 장소 (확정은 "다음" 버튼 탭 시점) */
-type SelectedStore =
-  | { kind: 'db'; store: NearbyStoreResponse }
-  | { kind: 'naver'; place: NaverPlaceDocument };
-
 const NEARBY_RADIUS_M = 3000; // 주변 매장 기본 반경 3km
 const USER_RADIUS_M = 500;    // 지도 반경 원 표시용
-const SEARCH_RADIUS_M = NEARBY_RADIUS_M;
-
-const isWithinSearchRadius = (distanceM: number | null): boolean => {
-  if (distanceM == null) return false;
-  return distanceM <= SEARCH_RADIUS_M;
-};
+const SEARCH_RADIUS_M = 5000; // 키워드 검색 반경 — 본인 동네에서 살짝 떨어진 체인점도 포착
 
 const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { latitude: regionLat, longitude: regionLng, regionName } = useLocationStore();
+  const { latitude: regionLat, longitude: regionLng } = useLocationStore();
   const { setStore } = usePriceRegisterStore();
 
   useUnsavedChangesWarning();
@@ -128,7 +74,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>('pending');
   const [rawQuery, setRawQuery] = useState('');
   const debouncedQuery = useDebounce(rawQuery, 300);
-  const [selected, setSelected] = useState<SelectedStore | null>(null);
+  const [selected, setSelected] = useState<NearbyStoreResponse | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
   const initialRegionLat = useRef(regionLat);
@@ -163,26 +109,6 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   const hasSearchOrigin = searchOrigin !== null;
   const isUsingRegionFallback = searchOrigin?.source === 'region';
 
-  const storedRegionHint = useMemo(
-    () => normalizeRegionHint(regionName),
-    [regionName],
-  );
-  const reverseTargetLat = gpsCoords?.latitude ?? null;
-  const reverseTargetLng = gpsCoords?.longitude ?? null;
-  const shouldResolveGpsRegionHint =
-    reverseTargetLat !== null && reverseTargetLng !== null;
-  const { data: gpsRegionHint } = useReverseGeocode(
-    shouldResolveGpsRegionHint ? reverseTargetLng : null,
-    shouldResolveGpsRegionHint ? reverseTargetLat : null,
-  );
-  const effectiveRegionHint = useMemo(() => {
-    const normalizedGpsRegionHint = normalizeRegionHint(gpsRegionHint);
-    if (gpsCoords) {
-      return normalizedGpsRegionHint ?? undefined;
-    }
-    return storedRegionHint ?? undefined;
-  }, [gpsCoords, gpsRegionHint, storedRegionHint]);
-
   // ─── 주변 매장 (쿼리 없을 때만 활성) ──────────────────────────────────────
   const {
     data: nearbyStores,
@@ -195,27 +121,36 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     NEARBY_RADIUS_M,
   );
 
-  // ─── 네이버 장소 검색 ────────────────────────────────────────────────────
+  // ─── 좌표 + 키워드 결합 검색 (자체 DB) ─────────────────────────────────────
+  // 백엔드가 거리 필터 + 거리순 정렬을 처리하므로 클라이언트에서는 결과를 그대로 사용한다.
+  // 외부 검색 API(Naver Local) 의 5건 한계/위치 미지원 문제를 자체 DB 로 해결한다.
   const {
-    data: naverPlaces,
-    isFetching: isNaverSearching,
-    isError: isNaverError,
-    refetch: refetchNaverPlaces,
-  } = useNaverPlaceSearch(
-    debouncedQuery,
-    isSearching && hasSearchOrigin,
-    effectiveRegionHint,
-  );
-
-  // ─── DB 매장명 검색 (검색 중일 때) ────────────────────────────────────────
-  const {
-    data: dbSearchStores,
-    isFetching: isDbSearching,
-    isError: isDbSearchError,
-    refetch: refetchDbSearch,
+    data: searchResults,
+    isFetching: isSearchFetching,
+    isError: isSearchError,
+    refetch: refetchSearch,
   } = useQuery({
-    queryKey: ['storeSearch', debouncedQuery],
-    queryFn: () => storeApi.searchByName(debouncedQuery).then(r => r.data),
+    queryKey: [
+      'storeSearchNearby',
+      debouncedQuery,
+      searchOriginLatitude,
+      searchOriginLongitude,
+    ],
+    queryFn: () => {
+      // enabled 가드로 진입 시점에 hasSearchOrigin 이 보장되지만, lint 회피 + 타입 안정성을
+      // 위해 명시적 가드를 둔다.
+      if (searchOriginLatitude === null || searchOriginLongitude === null) {
+        return Promise.resolve([]);
+      }
+      return storeApi
+        .searchNearby({
+          lat: searchOriginLatitude,
+          lng: searchOriginLongitude,
+          keyword: debouncedQuery,
+          radius: SEARCH_RADIUS_M,
+        })
+        .then((r) => r.data);
+    },
     enabled: isSearching && hasSearchOrigin,
     staleTime: STALE_TIME.medium,
   });
@@ -369,112 +304,26 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     return [...nearbyStores].sort((a, b) => a.distance - b.distance);
   }, [nearbyStores]);
 
-  // 검색 중 DB 결과를 "감지 가능 매장" 으로 merge
-  type DbListItem = {
-    kind: 'db';
-    store: NearbyStoreResponse;
-    distanceM: number | null;
-  };
-
-  type NaverListItem = {
-    kind: 'naver';
-    place: NaverPlaceDocument;
-    distanceM: number | null;
-  };
-
-  type ListItem = DbListItem | NaverListItem;
-
-  const listData = useMemo<ListItem[]>(() => {
+  // 검색 결과 또는 주변 매장. 백엔드에서 거리 정렬 + 반경 필터를 모두 처리하므로
+  // 클라이언트는 그대로 받아 표시한다.
+  const listData = useMemo<NearbyStoreResponse[]>(() => {
     if (isSearching) {
-      const originLatitude = searchOriginLatitude;
-      const originLongitude = searchOriginLongitude;
-
-      const dbMatches: DbListItem[] = (dbSearchStores ?? [])
-        .map(s => {
-          const distanceM = getDistanceFromOrigin(
-            originLatitude,
-            originLongitude,
-            s.latitude,
-            s.longitude,
-          );
-
-          return {
-            kind: 'db' as const,
-            store: {
-              ...s,
-              distance: distanceM ?? 0,
-            } as NearbyStoreResponse,
-            distanceM,
-          };
-        })
-        .filter(item => isWithinSearchRadius(item.distanceM));
-
-      const naverIds = new Set(
-        (dbSearchStores ?? [])
-          .map(s => s.externalPlaceId)
-          .filter((v): v is string => !!v),
-      );
-
-      const naverItems: NaverListItem[] = (naverPlaces ?? [])
-        .filter(p => !naverIds.has(p.id))
-        .map(p => {
-          const coords = parseNaverCoords(p);
-          const distanceM = coords
-            ? getDistanceFromOrigin(
-                originLatitude,
-                originLongitude,
-                coords.latitude,
-                coords.longitude,
-              )
-            : null;
-
-          return {
-            kind: 'naver' as const,
-            place: p,
-            distanceM,
-          };
-        })
-        .filter(item => isWithinSearchRadius(item.distanceM));
-
-      return [...dbMatches, ...naverItems].sort((a, b) => {
-        if (a.distanceM === null && b.distanceM === null) return 0;
-        if (a.distanceM === null) return 1;
-        if (b.distanceM === null) return -1;
-        return a.distanceM - b.distanceM;
-      });
+      return searchResults ?? [];
     }
-    return sortedNearby.map(s => ({ kind: 'db', store: s, distanceM: s.distance }));
-  }, [
-    isSearching,
-    dbSearchStores,
-    naverPlaces,
-    sortedNearby,
-    searchOriginLatitude,
-    searchOriginLongitude,
-  ]);
+    return sortedNearby;
+  }, [isSearching, searchResults, sortedNearby]);
 
   // ─── 지도 마커 ────────────────────────────────────────────────────────────
   const mapMarkers = useMemo(
     () =>
       listData
         .map(item => {
-          if (item.kind === 'db') {
-            return {
-              id: item.store.id,
-              latitude: item.store.latitude,
-              longitude: item.store.longitude,
-              title: item.store.name,
-              type: item.store.type,
-            };
-          }
-          const coords = parseNaverCoords(item.place);
-          if (!coords) return null;
           return {
-            id: item.place.id,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            title: item.place.name,
-            type: inferStoreType(item.place.category),
+            id: item.id,
+            latitude: item.latitude,
+            longitude: item.longitude,
+            title: item.name,
+            type: item.type,
           };
         })
         .filter((m): m is NonNullable<typeof m> => m !== null),
@@ -482,54 +331,27 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   // ─── 선택 핸들러 ──────────────────────────────────────────────────────────
-  const selectedId: string | null = selected
-    ? selected.kind === 'db'
-      ? selected.store.id
-      : selected.place.id
-    : null;
+  const selectedId: string | null = selected ? selected.id : null;
 
-  const handleSelectItem = useCallback(
-    (item: ListItem) => {
-      setInlineError(null);
-      setSelected(item);
-      const lat =
-        item.kind === 'db'
-          ? item.store.latitude
-          : parseFloat(item.place.y);
-      const lng =
-        item.kind === 'db'
-          ? item.store.longitude
-          : parseFloat(item.place.x);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        mapRef.current?.animateCameraTo({ latitude: lat, longitude: lng, zoom: 17 });
-      }
-    },
-    [],
-  );
+  const handleSelectItem = useCallback((item: NearbyStoreResponse) => {
+    setInlineError(null);
+    setSelected(item);
+    if (
+      Number.isFinite(item.latitude) &&
+      Number.isFinite(item.longitude)
+    ) {
+      mapRef.current?.animateCameraTo({
+        latitude: item.latitude,
+        longitude: item.longitude,
+        zoom: 17,
+      });
+    }
+  }, []);
 
-  // ─── "다음" 버튼 — DB 매장은 그대로, 네이버 장소는 find-or-create ─────────
+  // ─── "다음" 버튼 — 자체 DB 매장이라 그대로 다음 단계로 진행 ─────────────────
   const { mutate: confirmSelection, isPending: isConfirming } = useMutation({
-    mutationFn: async (sel: SelectedStore) => {
-      if (sel.kind === 'db') return sel.store;
-      // naver → DB find-or-create
-      const place = sel.place;
-      try {
-        const existing = await storeApi.getByExternalId(place.id).then(r => r.data);
-        return existing;
-      } catch (err) {
-        if (!isAxiosError(err) || err.response?.status !== 404) throw err;
-        const dto: CreateStoreDto = {
-          name: place.name,
-          type: inferStoreType(place.category),
-          latitude: parseFloat(place.y),
-          longitude: parseFloat(place.x),
-          address: place.roadAddress || place.address,
-          externalPlaceId: place.id,
-        };
-        return storeApi.create(dto).then(r => r.data);
-      }
-    },
-    onSuccess: store => {
+    mutationFn: async (sel: NearbyStoreResponse) => sel,
+    onSuccess: (store) => {
       setInlineError(null);
       setStore(store.id, store.name);
       navigation.navigate('InputMethod');
@@ -586,35 +408,21 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
 
   // ─── 렌더 ─────────────────────────────────────────────────────────────────
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<ListItem>) => {
-      const name = item.kind === 'db' ? item.store.name : item.place.name;
-      const address =
-        item.kind === 'db'
-          ? item.store.address
-          : item.place.roadAddress || item.place.address;
-      const distance =
-        item.distanceM;
-      const type =
-        item.kind === 'db'
-          ? item.store.type
-          : inferStoreType(item.place.category);
-      const id = item.kind === 'db' ? item.store.id : item.place.id;
-      return (
-        <StoreListCard
-          name={name}
-          address={address}
-          distance={distance}
-          type={type}
-          isActive={selectedId === id}
-          onPress={() => handleSelectItem(item)}
-        />
-      );
-    },
+    ({ item }: ListRenderItemInfo<NearbyStoreResponse>) => (
+      <StoreListCard
+        name={item.name}
+        address={item.address}
+        distance={item.distance}
+        type={item.type}
+        isActive={selectedId === item.id}
+        onPress={() => handleSelectItem(item)}
+      />
+    ),
     [selectedId, handleSelectItem],
   );
 
   const keyExtractor = useCallback(
-    (item: ListItem) => (item.kind === 'db' ? `db-${item.store.id}` : `nv-${item.place.id}`),
+    (item: NearbyStoreResponse) => item.id,
     [],
   );
 
@@ -622,20 +430,20 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   const isListLoading =
     isAwaitingGps ||
     (!isSearching && isNearbyLoading) ||
-    (isSearching && hasSearchOrigin && (isNaverSearching || isDbSearching));
+    (isSearching && hasSearchOrigin && isSearchFetching);
   const isAwaitingGpsForSearch = isSearching && !hasSearchOrigin;
   const isListError =
     (!isSearching && isNearbyError) ||
-    (isSearching && hasSearchOrigin && (isNaverError || isDbSearchError));
+    (isSearching && hasSearchOrigin && isSearchError);
 
   const handleRetryList = useCallback(() => {
     setInlineError(null);
     if (isSearching && hasSearchOrigin) {
-      void Promise.all([refetchNaverPlaces(), refetchDbSearch()]);
+      void refetchSearch();
       return;
     }
     void refetchNearbyStores();
-  }, [isSearching, hasSearchOrigin, refetchNaverPlaces, refetchDbSearch, refetchNearbyStores]);
+  }, [isSearching, hasSearchOrigin, refetchSearch, refetchNearbyStores]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -719,9 +527,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
                 longitude={m.longitude}
                 onTap={() => {
                   // 마커 탭 시 리스트에서 해당 아이템 찾아 선택
-                  const found = listData.find(
-                    it => (it.kind === 'db' ? it.store.id : it.place.id) === m.id,
-                  );
+                  const found = listData.find((it) => it.id === m.id);
                   if (found) handleSelectItem(found);
                 }}
                 tintColor={isActive ? colors.primary : cat.fg}
