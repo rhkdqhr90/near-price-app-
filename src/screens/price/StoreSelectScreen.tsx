@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import Geolocation from 'react-native-geolocation-service';
 import type { PriceRegisterScreenProps } from '../../navigation/types';
 import type { NearbyStoreResponse } from '../../types/api.types';
@@ -132,7 +132,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
   } = useQuery({
     queryKey: [
       'storeSearchNearby',
-      debouncedQuery,
+      debouncedQuery.trim(),
       searchOriginLatitude,
       searchOriginLongitude,
     ],
@@ -142,11 +142,12 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       if (searchOriginLatitude === null || searchOriginLongitude === null) {
         return Promise.resolve([]);
       }
+      // 백엔드도 trim 하지만 캐시 키 정합성과 명시성을 위해 클라이언트에서 한 번 더 정규화한다.
       return storeApi
         .searchNearby({
           lat: searchOriginLatitude,
           lng: searchOriginLongitude,
-          keyword: debouncedQuery,
+          keyword: debouncedQuery.trim(),
           radius: SEARCH_RADIUS_M,
         })
         .then((r) => r.data);
@@ -222,6 +223,11 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
                     longitude: initialRegionLng.current,
                     zoom: 15,
                   });
+                } else {
+                  // 저장된 동네 위치도 없는 엣지 케이스 — 사용자가 검색 보류 이유를 알 수 있도록 안내.
+                  setInlineError(
+                    '저장된 위치 정보가 없어요. 동네 설정 후 다시 시도해 주세요.',
+                  );
                 }
               },
               { enableHighAccuracy: true, timeout: 20000, maximumAge: 0, forceRequestLocation: true },
@@ -348,23 +354,13 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, []);
 
-  // ─── "다음" 버튼 — 자체 DB 매장이라 그대로 다음 단계로 진행 ─────────────────
-  const { mutate: confirmSelection, isPending: isConfirming } = useMutation({
-    mutationFn: async (sel: NearbyStoreResponse) => sel,
-    onSuccess: (store) => {
-      setInlineError(null);
-      setStore(store.id, store.name);
-      navigation.navigate('InputMethod');
-    },
-    onError: () => {
-      setInlineError('매장 정보를 처리하는 데 실패했습니다. 잠시 후 다시 시도해 주세요.');
-    },
-  });
-
+  // ─── "다음" 버튼 — 자체 DB 매장이라 별도 비동기 작업 없이 바로 진행 ───────────
   const handleNext = useCallback(() => {
     if (!selected) return;
-    confirmSelection(selected);
-  }, [selected, confirmSelection]);
+    setInlineError(null);
+    setStore(selected.id, selected.name);
+    navigation.navigate('InputMethod');
+  }, [selected, setStore, navigation]);
 
   // ─── GPS 버튼 (지도 현재 위치 recenter) ───────────────────────────────────
   const handleRecenter = useCallback(() => {
@@ -616,7 +612,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       ) : isAwaitingGpsForSearch ? (
         <View style={styles.listStatus}>
-          <Text style={styles.listStatusText}>현재 위치를 확인한 뒤 3km 반경으로 검색합니다.</Text>
+          <Text style={styles.listStatusText}>{`현재 위치를 확인한 뒤 ${SEARCH_RADIUS_M / 1000}km 반경으로 검색합니다.`}</Text>
         </View>
       ) : isListError ? (
         <View style={styles.listStatus}>
@@ -641,7 +637,7 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
           ListEmptyComponent={
             <Text style={styles.emptyText}>
               {isSearching
-                ? '내 위치 기준 3km 내 검색 결과가 없어요. 아래 "새 매장 직접 등록" 을 이용해 주세요.'
+                ? `내 위치 기준 ${SEARCH_RADIUS_M / 1000}km 내 검색 결과가 없어요. 아래 "새 매장 직접 등록" 을 이용해 주세요.`
                 : '주변에 등록된 매장이 없어요.'}
             </Text>
           }
@@ -663,19 +659,15 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
       {/* 하단 고정 "다음" 버튼 */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <TouchableOpacity
-          style={[styles.nextBtn, (!selected || isConfirming) && styles.nextBtnDisabled]}
+          style={[styles.nextBtn, !selected && styles.nextBtnDisabled]}
           onPress={handleNext}
-          disabled={!selected || isConfirming}
+          disabled={!selected}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={selected ? '다음 단계' : '매장을 선택하세요'}
-          accessibilityState={{ disabled: !selected || isConfirming }}
+          accessibilityState={{ disabled: !selected }}
         >
-          {isConfirming ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Text style={styles.nextBtnText}>다음</Text>
-          )}
+          <Text style={styles.nextBtnText}>다음</Text>
         </TouchableOpacity>
       </View>
     </View>
