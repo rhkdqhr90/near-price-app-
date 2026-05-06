@@ -27,6 +27,7 @@ import {
   NaverMapMarkerOverlay,
   NaverMapCircleOverlay,
   type NaverMapViewRef,
+  type ClusterMarkerProp,
 } from '@mj-studio/react-native-naver-map';
 import MapViewWrapper from '../../components/map/MapViewWrapper';
 import SearchIcon from '../../components/icons/SearchIcon';
@@ -40,7 +41,6 @@ import { spacing } from '../../theme/spacing';
 import { typography, PJS } from '../../theme/typography';
 import { DEFAULT_LATITUDE, DEFAULT_LONGITUDE } from '../../utils/constants';
 import { useDebounce } from '../../hooks/useDebounce';
-import { getStoreCategoryColors } from '../../utils/storeCategory';
 
 // 자체 DB 의 좌표+키워드 결합 검색을 사용하므로 네이버 카테고리 추론/매장 등록 헬퍼는 더 이상 필요 없다.
 
@@ -319,22 +319,82 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
     return sortedNearby;
   }, [isSearching, searchResults, sortedNearby]);
 
-  // ─── 지도 마커 ────────────────────────────────────────────────────────────
-  const mapMarkers = useMemo(
+  // ─── 지도 마커 (네이버 SDK native 클러스터링) ─────────────────────────────
+  // 30개 마커가 한 화면에 폭주하지 않도록 줌 레벨에 따라 자동 클러스터링한다.
+  // 클러스터(여러 매장 묶음) 탭 → SDK가 자동 줌 in. leaf(단일 매장) 탭 →
+  // onTapClusterLeaf 로 매장 선택.
+  const clusterMarkers = useMemo<ClusterMarkerProp[]>(
     () =>
-      listData
-        .map(item => {
-          return {
-            id: item.id,
-            latitude: item.latitude,
-            longitude: item.longitude,
-            title: item.name,
-            type: item.type,
-          };
-        })
-        .filter((m): m is NonNullable<typeof m> => m !== null),
+      listData.map((item) => ({
+        identifier: item.id,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        width: 32,
+        height: 40,
+      })),
     [listData],
   );
+
+  const handleClusterLeafTap = useCallback(
+    (p: { markerIdentifier: string }) => {
+      const found = listData.find((it) => it.id === p.markerIdentifier);
+      if (found) {
+        setInlineError(null);
+        setSelected(found);
+        // 선택 시 그 매장 위치로 살짝 줌 in
+        if (
+          Number.isFinite(found.latitude) &&
+          Number.isFinite(found.longitude)
+        ) {
+          mapRef.current?.animateCameraTo({
+            latitude: found.latitude,
+            longitude: found.longitude,
+            zoom: 17,
+          });
+        }
+      }
+    },
+    [listData],
+  );
+
+  // ─── 검색 결과가 들어오면 모든 매장이 화면에 보이도록 카메라 자동 fit ───────
+  // 검색 직후 사용자 GPS 줌 레벨이 너무 빡빡해 결과 매장이 화면 밖에 있던 이슈를 해결.
+  // 사용자 GPS 위치도 같이 보이게 포함하고, 5% padding 으로 가장자리 여유를 둔다.
+  useEffect(() => {
+    if (!isSearching) return;
+    if (!searchResults || searchResults.length === 0) return;
+
+    if (searchResults.length === 1) {
+      mapRef.current?.animateCameraTo({
+        latitude: searchResults[0].latitude,
+        longitude: searchResults[0].longitude,
+        zoom: 17,
+      });
+      return;
+    }
+
+    const lats = searchResults.map((s) => s.latitude);
+    const lngs = searchResults.map((s) => s.longitude);
+    let minLat = Math.min(...lats);
+    let maxLat = Math.max(...lats);
+    let minLng = Math.min(...lngs);
+    let maxLng = Math.max(...lngs);
+
+    if (gpsCoords) {
+      minLat = Math.min(minLat, gpsCoords.latitude);
+      maxLat = Math.max(maxLat, gpsCoords.latitude);
+      minLng = Math.min(minLng, gpsCoords.longitude);
+      maxLng = Math.max(maxLng, gpsCoords.longitude);
+    }
+
+    const padLat = (maxLat - minLat) * 0.05 || 0.001;
+    const padLng = (maxLng - minLng) * 0.05 || 0.001;
+
+    mapRef.current?.animateCameraWithTwoCoords({
+      coord1: { latitude: minLat - padLat, longitude: minLng - padLng },
+      coord2: { latitude: maxLat + padLat, longitude: maxLng + padLng },
+    });
+  }, [isSearching, searchResults, gpsCoords]);
 
   // ─── 선택 핸들러 ──────────────────────────────────────────────────────────
   const selectedId: string | null = selected ? selected.id : null;
@@ -499,6 +559,17 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
           maxZoom={18}
           mapType="Basic"
           locale="ko"
+          clusters={[
+            {
+              width: 56,
+              height: 56,
+              markers: clusterMarkers,
+              // maxZoom 보다 더 확대하면 모든 마커가 개별 표시됨 (15 정도가 적정)
+              maxZoom: 15,
+              screenDistance: 90,
+            },
+          ]}
+          onTapClusterLeaf={handleClusterLeafTap}
         >
           {/* 반경 원 (500m) */}
           {gpsCoords ? (
@@ -512,29 +583,21 @@ const StoreSelectScreen: React.FC<Props> = ({ navigation }) => {
             />
           ) : null}
 
-          {/* 매장 핀 (카테고리별 컬러) */}
-          {mapMarkers.map(m => {
-            const cat = getStoreCategoryColors(m.type);
-            const isActive = selectedId === m.id;
-            return (
-              <NaverMapMarkerOverlay
-                key={m.id}
-                latitude={m.latitude}
-                longitude={m.longitude}
-                onTap={() => {
-                  // 마커 탭 시 리스트에서 해당 아이템 찾아 선택
-                  const found = listData.find((it) => it.id === m.id);
-                  if (found) handleSelectItem(found);
-                }}
-                tintColor={isActive ? colors.primary : cat.fg}
-                caption={{
-                  text: m.title,
-                  textSize: 11,
-                  color: isActive ? colors.primary : cat.fg,
-                }}
-              />
-            );
-          })}
+          {/* 선택된 매장 강조 (클러스터 위 별도 오버레이) */}
+          {selected ? (
+            <NaverMapMarkerOverlay
+              latitude={selected.latitude}
+              longitude={selected.longitude}
+              tintColor={colors.primary}
+              width={44}
+              height={52}
+              caption={{
+                text: selected.name,
+                textSize: 12,
+                color: colors.primary,
+              }}
+            />
+          ) : null}
         </MapViewWrapper>
 
         {/* 지도 위 검색바 + 내 위치 버튼 */}
